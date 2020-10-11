@@ -28,3 +28,36 @@ steps:
   depends_on:
   - init
 
+---
+
+kind: pipeline
+name: i386-build
+
+platform:
+  arch: amd64
+
+steps:
+- name: init
+  image: clang-nasm-gmake
+  pull: never
+  commands:
+  - mkdir bintmp
+
+- name: core
+  image: clang-nasm-gmake
+  pull: never
+  commands:
+  - make root ARCH=i386 BINDIR=bintmp
+  depends_on:
+  - init
+
+- name: modules
+  image: clang-nasm-gmake
+  pull: never
+  commands:
+  - make modules ARCH=i386 BINDIR=bintmp
+  depends_on:
+  - init
+
+
+
