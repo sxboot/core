@@ -152,7 +152,7 @@ status_t ubi_load_kernel(char* filename){
 	if(filePath == 0)
 		FERROR(TSX_OUT_OF_MEMORY);
 
-	uint64_t size = 0;
+	size_t size = 0;
 	size_t imglocation = 0;
 	status = kernel_read_file(filePath, &imglocation, &size);
 	CERROR();
@@ -167,10 +167,17 @@ status_t ubi_load_kernel(char* filename){
 
 		elf_file* file = (elf_file*) imglocation;
 
+#if defined(ARCH_amd64)
 		if(file->e_machine != ELF_MACHINE_AMD64){
 			log_error("ELF file is not compatible with amd64 (e_machine=0x%X)\n", file->e_machine);
 			FERROR(TSX_INVALID_FORMAT);
 		}
+#elif defined(ARCH_i386)
+		if(file->e_machine != ELF_MACHINE_i386){
+			log_error("ELF file is not compatible with i386 (e_machine=0x%X)\n", file->e_machine);
+			FERROR(TSX_INVALID_FORMAT);
+		}
+#endif
 
 		// get header
 		elf_symtab* headerSym = elf_get_symtab_entry(file, "ubi_header");
@@ -190,10 +197,17 @@ status_t ubi_load_kernel(char* filename){
 
 		pe_file* file = mz_get_pe((mz_file*) imglocation);
 
+#if defined(ARCH_amd64)
 		if(file->p_machine != PE_MACHINE_AMD64){
 			log_error("PE file is not compatible with amd64 (p_machine=0x%X)\n", file->p_machine);
 			FERROR(TSX_INVALID_FORMAT);
 		}
+#elif defined(ARCH_i386)
+		if(file->p_machine != PE_MACHINE_i386){
+			log_error("PE file is not compatible with i386 (p_machine=0x%X)\n", file->p_machine);
+			FERROR(TSX_INVALID_FORMAT);
+		}
+#endif
 
 		pe_section_header* section = pe_get_section(file, ".ubihdr");
 		if(section){
@@ -316,9 +330,14 @@ status_t ubi_load_kernel_segs(){
 }
 
 status_t ubi_relocate(size_t kernelMinAddr, size_t kernelMaxAddr){
+#if defined(ARCH_amd64)
 	size_t addr = 0xffffffff00000000; // preferred address
+#elif defined(ARCH_i386)
+	size_t addr = 0; // 0 because relocation is not supported on i386 (default address)
+#endif
 	if((addr >= kernelMinAddr && addr <= kernelMaxAddr) || (addr + MMGR_USABLE_MEMORY >= kernelMinAddr && addr + MMGR_USABLE_MEMORY <= kernelMaxAddr) ||
 		(kernelMinAddr >= addr && kernelMinAddr <= addr + MMGR_USABLE_MEMORY) || (kernelMaxAddr >= addr && kernelMaxAddr <= addr + MMGR_USABLE_MEMORY)){
+		// this needs to be changed
 		if(SIZE_MAX - kernelMaxAddr >= MMGR_USABLE_MEMORY){
 			addr = kernelMaxAddr;
 		}else if(kernelMinAddr > MMGR_USABLE_MEMORY){
@@ -545,7 +564,7 @@ status_t ubi_create_module_table(ubi_k_module_table* table){
 			snprintf(readpath, readpathlen, "%s%s", kernelPartition, akpath);
 
 			log_debug("Loading %s ", readpath);
-			uint64_t size = 0;
+			size_t size = 0;
 			status = vfs_get_file_size(readpath, &size);
 			if(status != TSX_SUCCESS)kfree(readpath, readpathlen);
 			CERROR();
@@ -785,13 +804,21 @@ status_t ubi_post_init(){
 	return status;
 }
 
+#if defined(ARCH_amd64)
+#define UBI_ELF_CALLCONV __attribute__((sysv_abi))
+#define UBI_PE_CALLCONV __attribute__((ms_abi))
+#elif defined(ARCH_i386)
+#define UBI_ELF_CALLCONV
+#define UBI_PE_CALLCONV
+#endif
+
 ubi_status_t ubi_call_kernel(){
 	if(ubi_kernel_type == 1){
 		elf_file* file = ubi_kernel_location;
-		return ((ubi_status_t (__attribute__((sysv_abi)) *) (ubi_b_root_table*))(file->e_entry))(ubi_root);
+		return ((ubi_status_t (UBI_ELF_CALLCONV *) (ubi_b_root_table*))(file->e_entry))(ubi_root);
 	}else if(ubi_kernel_type == 2){
 		pe_file* file = mz_get_pe(ubi_kernel_location);
-		return ((ubi_status_t (__attribute__((ms_abi)) *) (ubi_b_root_table*))((size_t) file->po_entry))(ubi_root);
+		return ((ubi_status_t (UBI_PE_CALLCONV *) (ubi_b_root_table*))((size_t) file->po_entry))(ubi_root);
 	}
 	return UBI_STATUS_ERROR;
 }

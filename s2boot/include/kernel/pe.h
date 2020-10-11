@@ -22,6 +22,7 @@
 #define PE_OPT_MAGIC_PE32 0x010b
 #define PE_OPT_MAGIC_PE64 0x020b
 
+#define PE_MACHINE_i386 0x014c
 #define PE_MACHINE_AMD64 0x8664
 
 #pragma pack(push,1)
