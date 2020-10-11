@@ -1,0 +1,20 @@
+
+kind: pipeline
+name: amd64-build
+
+platform:
+  arch: amd64
+
+steps:
+- name: core
+  image: clang-nasm-gmake
+  pull: never
+  commands:
+  - make root ARCH=amd64
+
+- name: modules
+  image: clang-nasm-gmake
+  pull: never
+  commands:
+  - make modules ARCH=amd64
+
