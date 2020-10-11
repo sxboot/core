@@ -6,15 +6,25 @@ platform:
   arch: amd64
 
 steps:
+- name: init
+  image: clang-nasm-gmake
+  pull: never
+  commands:
+  - mkdir ../bin
+
 - name: core
   image: clang-nasm-gmake
   pull: never
   commands:
   - make root ARCH=amd64
+  depends_on:
+  - init
 
 - name: modules
   image: clang-nasm-gmake
   pull: never
   commands:
   - make modules ARCH=amd64
+  depends_on:
+  - init
 
