@@ -26,7 +26,7 @@ world: root modules
 
 root: s0 s1 s2 s3
 
-modules: $(SRCMODDIR)/Makefile
+modules: FORCE
 	$(MAKE) -C $(SRCMODDIR)/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) ROOTS2BOOT=$(SRCDIR)/s2boot CC=$(CC) LD=$(LD) NASM=$(NASM)
 
 
@@ -39,12 +39,14 @@ s2: s2boot
 s3: $(BINDIR)/s3boot
 
 
-s2boot: $(SRCDIR)/s2boot/Makefile
+s2boot: FORCE
 	$(MAKE) -C $(SRCDIR)/s2boot/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) CC=$(CC) LD=$(LD) NASM=$(NASM)
 
 $(BINDIR)/s%boot: $(SRCDIR)/asm/$(ARCH)/s%boot.asm
 	$(NASM) -f bin -o $@ $<
 
+
+FORCE:
 
 
 .PHONY: clean
