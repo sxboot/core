@@ -24,7 +24,9 @@
 						"Boots the menu entry given by the first argument, $C0$$ being the first menu entry.",
 						{
 							"title": "Arguments",
-							"content": "$bFirst argument:$$ A 0-based index specifying which menu entry to boot."
+							"content": [
+								"$bFirst argument:$$ A 0-based index specifying which menu entry to boot."
+							]
 						}
 					]
 				},
@@ -58,8 +60,10 @@
 						"Prints out the contents of a file.",
 						{
 							"title": "Arguments",
-							"content": "$bFirst argument:$$ The absolute path to the file that should be printed out. ",
-							"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$."
+							"content": [
+								"$bFirst argument:$$ The absolute path to the file that should be printed out. ",
+								"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$."
+							]
 						}
 					]
 				},
@@ -69,8 +73,10 @@
 						"Prints out the files in a directory.",
 						{
 							"title": "Arguments",
-							"content": "$bFirst argument:$$ The absolute path to the directory of which the files should be listed. ",
-							"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$."
+							"content": [
+								"$bFirst argument:$$ The absolute path to the directory of which the files should be listed. ",
+								"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$."
+							]
 						}
 					]
 				},
