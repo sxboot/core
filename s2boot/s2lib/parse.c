@@ -32,6 +32,7 @@ status_t parse_file(char* file){
 	status_t status = 0;
 	memset(&parse_data, 0, sizeof(parse_data_t));
 	parse_data.entries = parse_entries;
+	parse_data.timeout = 10; // default value
 	reloc_ptr((void**) &parse_data.entries);
 	memset(parse_entries, 0, sizeof(parse_entries));
 
