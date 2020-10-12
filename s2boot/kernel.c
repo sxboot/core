@@ -37,7 +37,7 @@
 
 
 #define VERSION_MAJOR 6
-#define VERSION_MINOR 1
+#define VERSION_MINOR 2
 
 
 static s1boot_data* s1data = 0;
