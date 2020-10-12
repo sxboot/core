@@ -1869,8 +1869,6 @@ read_fail:
 
 bits 16
 
-msg32no64		db	"Your computer does not support 64 bit", 0
-
 gdt32_start:
 	;null
 	db 00000000b
