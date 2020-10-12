@@ -15,7 +15,7 @@
 				"$l$is3boot$$ - Does late environment setup before calling the kernel. Not used when $is2boot$$ calls the kernel directly.$$",
 				"$$$n",
 				"$is2boot$$ contains and can load additional disk drivers, file system drivers and boot modules.$nA file system driver for FAT16 is the ",
-				"only file system driver included in the s2boot executable.$nBoot modules provide additional ways to load an operating system kernel. ",
+				"only file system driver included in the $is2boot$$ executable.$nBoot modules provide additional ways to load an operating system kernel. ",
 				"$is2boot$$ natively supports chain loading, loading a 32-bit ELF image, and loading a binary image."
 			]
 		}

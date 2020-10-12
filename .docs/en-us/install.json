@@ -29,7 +29,7 @@
 						"After that, copy the files $Cs2boot$$, $Cs3boot$$ and the appropriate disk driver from the directory where you built $isxboot$$ or ",
 						"from a pre-built package to a directory called $C/boot$$ on the partition. If you have an AHCI (SATA) drive, for example, copy the disk driver ",
 						"called $Cahci.ko$$ to $C/boot/bdd.ko$$.$n",
-						"Create the configuration file at $C/config/config.cfg$$ (See 'Configuration File' for more details).",
+						"Create the configuration file at $C/config/config.cfg$$ (See 'Configuration File' for more details).$n",
 						"Finally, you can add additional drivers under $C/lib/$$."
 					]
 				},
@@ -52,8 +52,8 @@
 						{
 							"title": "GPT-formatted hard drive",
 							"content": [
-								"Installation on a GPT drive is probably even harder than on MBR drives.$n$is0boot$$ is written the same way as on a MBR-formatted drive.",
-								"Because the previously unused area after the MBR is now used by the GPT partition table, s1boot is now written to the $isxboot$$ partition.",
+								"Installation on a GPT drive is probably even harder than on MBR drives.$n$is0boot$$ is written the same way as on a MBR-formatted drive. ",
+								"Because the previously unused area after the MBR is now used by the GPT partition table, $is1boot$$ is now written to the sxboot partition.",
 								" To make sure there is enough space you will need to reserve enough sectors before the start of the File Allocation Tables. ",
 								"If your tool for creating partitions does not support this, you will need to move all FAT structures manually (which is very tedious).$n",
 								"Before you copy $is1boot$$, you will also need to copy $isGboot$$ to the Volume Boot Record (the first sector of the partition). ",

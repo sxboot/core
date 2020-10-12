@@ -10,7 +10,7 @@
 				"$lGNU $Cmake$$$$",
 				"$l$Cgit$$, to download the source code$$",
 				"$$",
-				"It is recommended you build on Unix(-like) operating systems."
+				"It is recommended you build on Unix(-like) operating systems.",
 				{
 					"title": "Preparation on FreeBSD",
 					"content": [
@@ -56,7 +56,7 @@
 						"$L",
 						"$l$CARCH$$ - Target architecture. Valid options are $Camd64$$ and $Ci386$$. $bDefault:$$ $Camd64$$$$",
 						"$l$CBINDIR$$ - Where to write the resulting executable files. $bDefault:$$ $C../bin/ARCH$$ (ARCH is replaced by the name of the architecture)$$",
-						"$l$CWINDOWS$$ - Set to $Cyes$$ if you are building on Windows. $bDefault:$$ <none>$$"
+						"$l$CWINDOWS$$ - Set to $Cyes$$ if you are building on Windows. $bDefault:$$ <none>$$",
 						"$$"
 					]
 				}
