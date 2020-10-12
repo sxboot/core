@@ -13,7 +13,7 @@ NASM ?= nasm
 
 SRCDIR = .
 TMPDIR = ../$(ROOTBINDIR)/s2modtmp
-BINDIR = ../$(ROOTBINDIR)/s2modules
+DESTDIR = ../$(ROOTBINDIR)/s2modules
 
 CCFLAGS = -target $(ARCH)-pc-none-elf -fPIC -m$(BITS) -mno-sse -mno-red-zone -ffreestanding -I../$(ROOTS2BOOT)/include -I../$(ROOTS2BOOT)/arch/$(ARCH) -I../$(ROOTS2BOOT)/arch \
 -DARCH_$(ARCH) -DARCH_UPSTREAM_$(ARCH_UPSTREAM) -DARCH_NAME=$(ARCH) -DARCH_BITS=$(BITS) -Werror
@@ -26,7 +26,7 @@ source := $(wildcard $(SRCDIR)/*.c $(SRCDIR)/*/*.c $(SRCDIR)/*/*/*.c)
 objects_wdir := $(source:%.c=%.o)
 objects := $(objects_wdir:$(SRCDIR)/%=$(TMPDIR)/%)
 targets_wdir := $(source:%.c=%.ko)
-targets := $(targets_wdir:$(SRCDIR)/%=$(BINDIR)/%)
+targets := $(targets_wdir:$(SRCDIR)/%=$(DESTDIR)/%)
 
 
 
@@ -36,15 +36,15 @@ all: bindir link
 bindir:
 ifeq ($(WINDOWS), yes)
 	@if not exist $(subst /,\,$(TMPDIR)) mkdir $(subst /,\,$(TMPDIR))
-	@if not exist $(subst /,\,$(BINDIR)) mkdir $(subst /,\,$(BINDIR))
+	@if not exist $(subst /,\,$(DESTDIR)) mkdir $(subst /,\,$(DESTDIR))
 else
 	@mkdir -p $(TMPDIR)
-	@mkdir -p $(BINDIR)
+	@mkdir -p $(DESTDIR)
 endif
 
 link: $(targets)
 
-$(BINDIR)/%.ko: $(TMPDIR)/%.o
+$(DESTDIR)/%.ko: $(TMPDIR)/%.o
 ifeq ($(WINDOWS), yes)
 	@if not exist $(subst /,\,$(dir $@)) mkdir $(subst /,\,$(dir $@))
 else

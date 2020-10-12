@@ -11,7 +11,7 @@ else
 $(error Unknown or unsupported architecture '$(ARCH)')
 endif
 
-BINDIR ?= ../bin/$(ARCH)
+BINDIR ?= bin/$(ARCH)
 SRCDIR := .
 SRCMODDIR := modules
 

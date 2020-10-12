@@ -18,6 +18,12 @@
 				"only file system driver included in the $is2boot$$ executable.$nBoot modules provide additional ways to load an operating system kernel. ",
 				"$is2boot$$ natively supports chain loading, loading a 32-bit ELF image, and loading a binary image."
 			]
+		},
+		{
+			"title": "Support",
+			"content": [
+				"For support or suggestions, contact $iuser94729@omegazero.org$$"
+			]
 		}
 	]
 }

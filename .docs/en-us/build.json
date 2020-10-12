@@ -14,7 +14,7 @@
 				{
 					"title": "Preparation on FreeBSD",
 					"content": [
-						"On FreeBSD, LLVM comes pre-installed. To install the additional programs, run:$n",
+						"On FreeBSD, LLVM comes pre-installed. To install the additional programs, run:$n$n",
 						"$t$Cpkg update$$$n",
 						"$t$Cpkg install nasm gmake git$$$n$n",
 						"$bNote: $$Because GNU make will be installed as $Cgmake$$, you will need to use the $Cgmake$$ command instead of $Cmake$$ in the next steps."
@@ -29,11 +29,10 @@
 				"$t$Cgit clone https://git.omegazero.org/sxboot/core.git$$$n",
 				"$t$Ccd core$$$n$n",
 				"Create the target directory and compile everything using default settings:$n$n",
-				"$t$Cmkdir ../bin$$$n",
 				"$t$Cmake world$$$n$n",
 				"More build options are listed below.$n$n",
-				"Temporary files and the executable images will be stored at $C../bin/$$ by default, relative to where the build is started,",
-				" meaning if you clone the repository to $C/usr/local/sxboot/core$$ and run $Cmake$$ there, the files will be written to $C/usr/local/sxboot/bin/...$$ ."
+				"Temporary files and the executable images will be stored at $Cbin/$$ by default, relative to where the build is started,",
+				" meaning if you clone the repository to $C/usr/local/core$$ and run $Cmake$$ there, the files will be written to $C/usr/local/core/bin/...$$ ."
 			]
 		},
 		{
@@ -55,8 +54,8 @@
 					"content": [
 						"$L",
 						"$l$CARCH$$ - Target architecture. Valid options are $Camd64$$ and $Ci386$$. $bDefault:$$ $Camd64$$$$",
-						"$l$CBINDIR$$ - Where to write the resulting executable files. $bDefault:$$ $C../bin/ARCH$$ (ARCH is replaced by the name of the architecture)$$",
-						"$l$CWINDOWS$$ - Set to $Cyes$$ if you are building on Windows. $bDefault:$$ <none>$$",
+						"$l$CBINDIR$$ - Where to write the resulting executable files. $bDefault:$$ $Cbin/ARCH$$ (ARCH is replaced by the name of the architecture)$$",
+						"$l$CWINDOWS$$ - Set to $Cyes$$ if you are building on Windows. $bDefault:$$ (none)$$",
 						"$$"
 					]
 				}

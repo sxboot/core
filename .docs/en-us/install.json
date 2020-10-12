@@ -58,8 +58,8 @@
 								"If your tool for creating partitions does not support this, you will need to move all FAT structures manually (which is very tedious).$n",
 								"Before you copy $is1boot$$, you will also need to copy $isGboot$$ to the Volume Boot Record (the first sector of the partition). ",
 								"Make sure you only write the first 3 bytes and bytes 0x2B to 0x200 (end) to not overwrite the FAT parameter block.$n",
-								"The next sector of the partition will contain a similar structure as on MBR drives on the 2nd sector. It starts with an 8-byte ",
-								"signature: 'TSXBOOT3' (54 53 58 42 4F 4F 54 33 in Hex). The following values are:$L$la 4-byte 0-based number containing the start sector ",
+								"The next sector of the partition will contain a similar structure as on MBR drives on the second sector. It starts with an 8-byte ",
+								"signature: 'TSXBOOT3' (54 53 58 42 4F 4F 54 33 in Hex). The next values are:$L$la 4-byte 0-based number containing the start sector ",
 								"of $is1boot$$ $brelative to the start of the partition$$ (usually 2)$$$la 2-byte value containing the length in sectors of $is1boot$$ (same ",
 								"as the value on MBR drives)$$$la 2-byte value containing the 0-based partition number of the $isxboot$$ partition$$$$",
 								"Finally, copy $is1boot$$ to the hard drive starting at the specified sector inside the partition."
