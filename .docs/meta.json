@@ -1,0 +1,40 @@
+{
+	"name": "sxboot",
+	"default": "main",
+	"pages": [
+		{
+			"type": "page",
+			"name": "main",
+			"title": "Introduction",
+			"badges": true
+		},
+		{
+			"type": "separator"
+		},
+		{
+			"type": "page",
+			"name": "build",
+			"title": "Building"
+		},
+		{
+			"type": "page",
+			"name": "install",
+			"title": "Installation"
+		},
+		{
+			"type": "page",
+			"name": "configfile",
+			"title": "Configuration File"
+		},
+		{
+			"type": "page",
+			"name": "cmdline",
+			"title": "Command Line"
+		},
+		{
+			"type": "page",
+			"name": "dev",
+			"title": "Developer Guide"
+		}
+	]
+}

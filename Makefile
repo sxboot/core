@@ -24,11 +24,18 @@ NASM := nasm
 
 world: root modules
 
-root: s0 s1 s2 s3
+root: bindir s0 s1 s2 s3
 
 modules: FORCE
 	$(MAKE) -C $(SRCMODDIR)/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) ROOTS2BOOT=$(SRCDIR)/s2boot CC=$(CC) LD=$(LD) NASM=$(NASM)
 
+
+bindir:
+ifeq ($(WINDOWS), yes)
+	@if not exist $(subst /,\,$(BINDIR)) mkdir $(subst /,\,$(BINDIR))
+else
+	@mkdir -p $(BINDIR)
+endif
 
 s0: $(BINDIR)/s0boot $(BINDIR)/sGboot
 
