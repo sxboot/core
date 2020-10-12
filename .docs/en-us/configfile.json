@@ -1,0 +1,127 @@
+{
+	"title": "Configuration File",
+	"content": [
+		"The configuration file is loaded and parsed by $is2boot$$. It must be located on the $isxboot$$ partition at $C/config/config.cfg$$",
+		{
+			"title": "Syntax",
+			"content": [
+				"The configuration file is made up of key-value pairs separated by an $iequals$$-sign ($C=$$). A key-value pair is terminated by ",
+				"a line break or a semicolon ($C;$$).$nThe configuration file may also contain ",
+				"'subcategories', denoted by a key identifier followed by a name string in quotes and an opening brace $C{$$. ",
+				"This subcategory may contain more key-value pairs followed by a closing brace $C}$$.$n",
+				"Comments start with a $C#$$ at the beginning of a line, optionally with preceding whitespaces, and will cause the whole line to be ignored."
+			]
+		},
+		{
+			"title": "Global configuration options",
+			"content": [
+				{
+					"title": "timeout",
+					"content": [
+						"The number of seconds to show the menu without user interaction. If the user presses any key, this countdown will be stopped.$n",
+						"Must be a valid number.$n$n",
+						"$bDefault: $$10"
+					]
+				},
+				{
+					"title": "hdDrivers & fsDrivers",
+					"content": [
+						"Alternative paths to hard disk drivers and file system drivers on the $isxboot$$ partition.$n$n",
+						"$bDefault:$$$n/lib/disk/$n/lib/fs/"
+					]
+				}
+			]
+		},
+		{
+			"title": "Menu entry options",
+			"content": [
+				"A menu entry starts with the keyword $Centry$$, followed by the name in quotes and an opening brace. ",
+				"It then contains the arguments listed below and must end with a closing brace.",
+				{
+					"title": "type",
+					"content": [
+						"A string identifier of the boot procedure to use. May be anything available in the boot modules directory ($C/lib/boot/$$ by default).$n",
+						"For example, if $itype$$ is 'ubi', $is2boot$$ will attempt to load $C/lib/boot/ubi.ko$$ and start the module or show an error if the file ",
+						"does not exist.$n$is2boot$$ natively supports these boot types:$L",
+						"$l$Cchain$$ - Chainloads a VBR of the partition and drive given by the $ipartition$$ and $idrive$$ arguments.$$",
+						"$l$Cbinary$$ - Loads a file given by $ifile$$ at $idestination$$. The boot loader will jump to $idestination + offset$$ in either 16, ",
+						"32, or 64 bit mode (set by argument $ibits$$).$$",
+						"$l$Cmbr$$ - Similar to $ibinary$$, except that $idestination$$ and $ibits$$ are preset to $C0x7c00$$ and $C16$$, respectively.$$",
+						"$l$Cimage$$ - Loads an ELF file given by $ifile$$, sets it up according to the ELF program header and jumps to the entry point.",
+						"Must be a 32-bit executable.$$",
+						"$$",
+						"This argument is required for every menu entry."
+					]
+				},
+				{
+					"title": "drive",
+					"content": [
+						"Specifies which drive to use. The exact meaning of this argument depends on the boot type. Drive identifiers are made up of two parts: ",
+						"an up to four letter drive type name (eg $Cahci$$), followed by a 0-based drive number. Example: $Cahci0$$ (first drive connected using AHCI).$n$n",
+						"$bDefault: $$(none/boot drive)"
+					]
+				},
+				{
+					"title": "partition",
+					"content": [
+						"Specifies which partition to use. The exact meaning of this argument depends on the boot type. Must be below 256."
+					]
+				},
+				{
+					"title": "destination",
+					"content": [
+						"Specifies where to load a file. The exact meaning of this argument depends on the boot type. Can be in decimal or hexadecimal format."
+					]
+				},
+				{
+					"title": "offset",
+					"content": [
+						"Specifies an entry point offset. The exact meaning of this argument depends on the boot type. Can be in decimal or hexadecimal format."
+					]
+				},
+				{
+					"title": "bits",
+					"content": [
+						"Specifies in which mode to start the kernel file. The exact meaning of this argument depends on the boot type. Must be 16, 32 or 64."
+					]
+				},
+				{
+					"title": "file",
+					"content": [
+						"Absolute path to the kernel file to be loaded. Usually required, depending on the boot type.$nSee $iFile path format$$ below."
+					]
+				}
+			]
+		},
+		{
+			"title": "File path format",
+			"content": [
+				"File paths have this general format: $C/(driveType)(driveNum).(partitionNum)/(path to file)$$.$L",
+				"$l$CdriveType$$ - The drive type, for example $Cahci$$. Up to four letters long.$$",
+				"$l$CdriveNum$$ - A 0-based drive number. Must be below 255.$$",
+				"$l$CpartitionNum$$ - A 0-based partition number of the partition where the is located. Must be 255 or lower.$$",
+				"$l$Cpath to file$$ - The path to the file on the partition, for example $Cconfig/config.cfg$$.$$",
+				"$$$bExample file path:$$ $C/ahci0.0/config/config.cfg$$",
+				{
+					"title": "Variables",
+					"content": [
+						"File paths may contain variables. Variables can be accessed using [(variable name)]. The following variables are currently available:$L",
+						"$l$CDRIVETYPE$$ - The boot drive type.$$",
+						"$l$CDRIVENUM$$ - The boot drive number.$$",
+						"$l$CDRIVE$$ - The full boot drive identifier. Same as $C[DRIVETYPE][DRIVENUM]$$.$$",
+						"$l$CPART$$ - The boot partition number.$$",
+						"$l$CBDRIVE$$ - The full boot drive and partition identifier. Same as $C[DRIVE].[PART]$$.$$",
+						"$$"
+					]
+				}
+			]
+		},
+		{
+			"title": "Example configuration file",
+			"content": [
+				"$c[gray]# Set menu timeout to 5 seconds$$$n$c[blue]timeout$$ = $c[orange]5$$$n$c[blue]entry$$ $c[yellow]\"ELF file\"$$ {$n",
+				"$t$c[blue]type$$ = image$n$t$c[gray]# Load file /boot/kernel from the second partition of the boot drive$$$n$t$c[blue]file$$ = /[DRIVE].1/boot/kernel$n}$n"
+			]
+		}
+	]
+}

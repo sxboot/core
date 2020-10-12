@@ -1,0 +1,86 @@
+{
+	"title": "Command Line",
+	"content": [
+		"The command line of $is2boot$$ can be accessed by pressing $iC$$ in the boot menu.$n",
+		"Below is a list of the standard commands available in the command line. The command line additionally accepts several debugging commands not listed here.",
+		{
+			"title": "Builtin commands",
+			"content": [
+				{
+					"title": "help",
+					"content": [
+						"Prints a list of basic commands."
+					]
+				},
+				{
+					"title": "menu",
+					"content": [
+						"Returns to the boot menu."
+					]
+				},
+				{
+					"title": "boot",
+					"content": [
+						"Boots the menu entry given by the first argument, $C0$$ being the first menu entry.",
+						{
+							"title": "Arguments",
+							"content": "$bFirst argument:$$ A 0-based index specifying which menu entry to boot."
+						}
+					]
+				},
+				{
+					"title": "mem",
+					"content": [
+						"Shows current memory usage."
+					]
+				},
+				{
+					"title": "memmap",
+					"content": [
+						"The memory allocation map printed out in a human readable format."
+					]
+				},
+				{
+					"title": "vmemmap",
+					"content": [
+						"A map of all virtual memory ranges mapped."
+					]
+				},
+				{
+					"title": "bootdrive",
+					"content": [
+						"Prints out the boot drive."
+					]
+				},
+				{
+					"title": "cat",
+					"content": [
+						"Prints out the contents of a file.",
+						{
+							"title": "Arguments",
+							"content": "$bFirst argument:$$ The absolute path to the file that should be printed out. ",
+							"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$."
+						}
+					]
+				},
+				{
+					"title": "ls",
+					"content": [
+						"Prints out the files in a directory.",
+						{
+							"title": "Arguments",
+							"content": "$bFirst argument:$$ The absolute path to the directory of which the files should be listed. ",
+							"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$."
+						}
+					]
+				},
+				{
+					"title": "e820map (x86-only)",
+					"content": [
+						"The memory map provided by BIOS interrupt 0x15, function 0xe820 $bor$$ UEFI boot services if running on a UEFI system."
+					]
+				}
+			]
+		}
+	]
+}
