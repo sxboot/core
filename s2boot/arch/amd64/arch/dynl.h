@@ -40,18 +40,4 @@
 #define DYNL_R_x_INFO(sym, type)       (((uint64_t) (sym) << 32) + (uint64_t) (type))
 
 
-#pragma pack(push,1)
-typedef struct dynl_rel{
-	uint64_t r_offset;
-	uint64_t r_info;
-} dynl_rel;
-
-typedef struct dynl_rela{
-	uint64_t r_offset;
-	uint64_t r_info;
-	uint64_t r_addend;
-} dynl_rela;
-#pragma pack(pop)
-
-
 #endif /* __ARCH_DYNL_H__ */

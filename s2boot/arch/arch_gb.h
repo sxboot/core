@@ -40,5 +40,7 @@ bool arch_is_hw_interrupt_running();
 
 void arch_relocation(size_t oldAddr, size_t newAddr);
 
+size_t arch_rand(size_t max);
+
 
 #endif /* __ARCH_GB_H__ */

@@ -284,6 +284,10 @@ void cli_command_dbgdrive(uint8_t dest, char* args){
 	kfree(msg, strlen(msg));
 }
 
+void cli_command_dbgrand(uint8_t dest, char* args){
+	cli_printf(dest, "%u\n", kernel_pseudorandom(SIZE_MAX));
+}
+
 #ifdef ARCH_UPSTREAM_x86
 void cli_command_e820map(uint8_t dest, char* args){
 	mmgr_arch_mmap_entry* addr = 0;

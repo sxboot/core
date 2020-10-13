@@ -64,4 +64,7 @@ size_t kernel_get_reloc_base();
 
 void kernel_runtime_assertion(bool x, char* msg);
 
+size_t kernel_pseudorandom(size_t max);
+void kernel_pseudorandom_seed(size_t seed);
+
 #endif /* __KERNEL_KUTIL_H__ */

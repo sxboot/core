@@ -19,6 +19,20 @@
 #include <kernel/elf.h>
 
 
+#pragma pack(push,1)
+typedef struct dynl_rel{
+	uint64_t r_offset;
+	uint64_t r_info;
+} dynl_rel;
+
+typedef struct dynl_rela{
+	uint64_t r_offset;
+	uint64_t r_info;
+	uint64_t r_addend;
+} dynl_rela;
+#pragma pack(pop)
+
+
 /* Loads the ELF file passed to 'source' at the predefined vaddress 'sourceLocation' and then links the new file to an already loaded image 'targetimage'.
 *  Because the ELF file 'source' is loaded at a predefined vaddress, ignoring the memory address offset given in the ELF file, it is required to be a PIE.
    Used to load and link a shared library against a static image at a predefined address. */

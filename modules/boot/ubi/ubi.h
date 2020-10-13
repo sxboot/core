@@ -102,6 +102,9 @@ typedef struct ubi_k_mem_table{
 
 	void* stackLocation;
 	uintn_t stackSize;
+
+	void* kernelBase;
+	uintn_t kaslrSize;
 } ubi_k_mem_table;
 
 
@@ -287,11 +290,14 @@ status_t ubi_post_init();
 ubi_status_t ubi_call_kernel();
 
 void* ubi_get_file_addr(size_t vaddr);
+size_t ubi_get_elf_reldyn_var_addr_f(size_t addr);
+size_t ubi_get_elf_reldyn_var_addr(size_t addr);
 void ubi_set_checksum(ubi_b_table_header* table, size_t totalTableSize);
 void ubi_alloc_virtual(void** addr, size_t size);
 ubi_table_header* ubi_get_kernel_table(uint64_t magic);
 size_t ubi_get_table_size(uint64_t magic);
 uint32_t ubi_convert_to_ubi_memtype(uint32_t memtype);
+size_t ubi_get_random_kernel_offset(size_t kernelBase, size_t kaslrSize);
 
 
 ubi_status_t ubi_convert_to_ubi_status(status_t status);

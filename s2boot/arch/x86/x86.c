@@ -115,6 +115,11 @@ void arch_relocation(size_t oldAddr, size_t newAddr){
 }
 
 
+size_t arch_rand(size_t max){
+	return kernel_pseudorandom(max);
+}
+
+
 
 void __attribute__ ((interrupt)) x86_on_irq0(idt_interrupt_frame* frame){
 	pic_hw_int();

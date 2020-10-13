@@ -96,6 +96,9 @@ static size_t cRelocOldAddr = 0;
 static size_t cRelocNewAddr = 0;
 
 
+static size_t rand_next = 1602621212;
+
+
 static s3boot_data s3data;
 
 
@@ -1569,6 +1572,18 @@ void kernel_runtime_assertion(bool x, char* msg){
 		kernel_print_stack_trace();
 		kernel_halt();
 	}
+}
+
+
+size_t kernel_pseudorandom(size_t max){
+	if(max == 0)
+		return 0;
+	rand_next = rand_next * 1103515245 + 12345;
+	return (size_t) (rand_next) % max;
+}
+
+void kernel_pseudorandom_seed(size_t seed){
+	rand_next = seed;
 }
 
 

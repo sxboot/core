@@ -31,6 +31,7 @@
 #include <kernel/list.h>
 #include <kernel/vfs.h>
 #include <kernel/util.h>
+#include <kernel/dynl.h>
 #include "ubi.h"
 
 
@@ -50,6 +51,8 @@ static ubi_k_root_table* ubi_kernel = NULL;
 static size_t ubi_kernel_type = 0; // 1 - elf, 2 - pe
 static void* ubi_kernel_location = NULL;
 static size_t ubi_kernel_base = 0;
+static size_t ubi_kernel_top = 0;
+static size_t ubi_kernel_offset = 0;
 
 static ubi_b_table_header* lastTable = NULL;
 
@@ -68,6 +71,8 @@ status_t kboot_start(parse_entry* entry){
 	ubi_kernel_type = 0;
 	ubi_kernel_location = NULL;
 	ubi_kernel_base = 0;
+	ubi_kernel_top = 0;
+	ubi_kernel_offset = 0;
 	lastTable = NULL;
 
 	reloc_ptr((void**) &ubi_root);
@@ -204,6 +209,27 @@ status_t ubi_load_kernel(char* filename){
 				ubi_kernel = ubi_get_file_addr(ubihdrSec->sh_addr);
 			}
 		}
+
+		elf_ph* ph = elf_get_ph(file);
+		if(ph == 0)
+			FERROR(TSX_INVALID_FORMAT);
+		if(file->e_phentsize != sizeof(elf_ph))
+			FERROR(TSX_INVALID_FORMAT);
+
+		size_t minAddr = SIZE_MAX;
+		size_t maxAddr = 0;
+		for(int i = 0; i < file->e_phnum; i++){
+			if(ph[i].p_type != ELF_PH_TYPE_LOAD)
+				continue;
+			if(ph[i].p_vaddr < minAddr)
+				minAddr = ph[i].p_vaddr;
+			if(ph[i].p_vaddr + ph[i].p_memsz > maxAddr)
+				maxAddr = ph[i].p_vaddr + ph[i].p_memsz;
+		}
+		if(minAddr == SIZE_MAX)
+			FERROR(TSX_ERROR);
+		ubi_kernel_base = minAddr;
+		ubi_kernel_top = maxAddr;
 	}else if(mz_is_mz((mz_file*) imglocation) && pe_is_pe(mz_get_pe((mz_file*) imglocation))){
 		log_debug("Kernel is PE file\n");
 
@@ -228,6 +254,23 @@ status_t ubi_load_kernel(char* filename){
 		if(section){
 			ubi_kernel = ubi_get_file_addr(section->ps_vaddr);
 		}
+
+		pe_section_header* sections = pe_get_sections(file);
+		if(sections == 0)
+			FERROR(TSX_INVALID_FORMAT);
+
+		size_t minAddr = SIZE_MAX;
+		size_t maxAddr = 0;
+		for(size_t i = 0; i < file->p_sections; i++){
+			if(sections[i].ps_vaddr < minAddr)
+				minAddr = sections[i].ps_vaddr;
+			if(sections[i].ps_vaddr + sections[i].ps_vsize > maxAddr)
+				maxAddr = sections[i].ps_vaddr + sections[i].ps_vsize;
+		}
+		if(minAddr == SIZE_MAX)
+			FERROR(TSX_ERROR);
+		ubi_kernel_base = minAddr;
+		ubi_kernel_top = maxAddr;
 	}else{
 		log_error("File format not recognized");
 		FERROR(TSX_INVALID_FORMAT);
@@ -238,6 +281,11 @@ status_t ubi_load_kernel(char* filename){
 	}
 
 	log_debug("ubi_k_root_table=%Y\n", (size_t) ubi_kernel);
+
+	if(ubi_kernel_top - ubi_kernel_base == 0){
+		log_error("Kernel is empty\n");
+		FERROR(TSX_ERROR);
+	}
 
 	kernelPartition = kmalloc(strlen(filePath) + 1);
 	memcpy(kernelPartition, filePath, strlen(filePath) + 1);
@@ -273,59 +321,43 @@ status_t ubi_load_kernel_segs(){
 		elf_ph* ph = elf_get_ph(file);
 		if(ph == 0)
 			FERROR(TSX_INVALID_FORMAT);
-		if(file->e_phentsize != sizeof(elf_ph))
-			FERROR(TSX_INVALID_FORMAT);
-		size_t minAddr = SIZE_MAX;
-		size_t maxAddr = 0;
-		for(int i = 0; i < file->e_phnum; i++){
-			if(ph[i].p_type != ELF_PH_TYPE_LOAD)
-				continue;
-			if(ph[i].p_vaddr < minAddr)
-				minAddr = ph[i].p_vaddr;
-			if(ph[i].p_vaddr + ph[i].p_memsz > maxAddr)
-				maxAddr = ph[i].p_vaddr + ph[i].p_memsz;
-		}
-		if(minAddr == SIZE_MAX)
-			FERROR(TSX_ERROR);
-		ubi_kernel_base = minAddr;
-		status = ubi_relocate(minAddr, maxAddr);
+		status = ubi_relocate(ubi_kernel_base, ubi_kernel_top);
 		CERROR();
 		file = ubi_kernel_location; // file location may have been changed by ubi_relocate
 		ph = elf_get_ph(file);
+
+		elf_loaded_image* image = kmalloc(sizeof(elf_loaded_image));
+		if(!image)
+			FERROR(TSX_OUT_OF_MEMORY);
+		elf_gen_loaded_image_data(file, ubi_kernel_offset, image);
+
 		for(int i = 0; i < file->e_phnum; i++){
 			if(ph[i].p_type != ELF_PH_TYPE_LOAD)
 				continue;
 			void* secLoc = mmgr_alloc_block_sequential(ph[i].p_memsz);
 			if(!secLoc)
 				FERROR(TSX_OUT_OF_MEMORY);
-			log_debug("%Y -> %Y (0x%X) : 0x%X (0x%X)\n", ph[i].p_vaddr, (size_t) secLoc, ph[i].p_memsz, ph[i].p_offset, ph[i].p_filesz);
+			log_debug("%Y -> %Y (0x%X) : 0x%X (0x%X)\n", ph[i].p_vaddr + ubi_kernel_offset, (size_t) secLoc, ph[i].p_memsz, ph[i].p_offset, ph[i].p_filesz);
 			for(size_t addr = 0; addr < ph[i].p_memsz; addr += 0x1000){
-				vmmgr_map_page((size_t) secLoc + addr, ph[i].p_vaddr + addr);
+				vmmgr_map_page((size_t) secLoc + addr, ph[i].p_vaddr + ubi_kernel_offset + addr);
 			}
-			memset((void*) (ph[i].p_vaddr), 0, ph[i].p_memsz);
-			memcpy((void*) (ph[i].p_vaddr), (void*) (ph[i].p_offset + (size_t) file), ph[i].p_filesz);
+			memset((void*) (ph[i].p_vaddr + ubi_kernel_offset), 0, ph[i].p_memsz);
+			memcpy((void*) (ph[i].p_vaddr + ubi_kernel_offset), (void*) (ph[i].p_offset + (size_t) file), ph[i].p_filesz);
 		}
+		if(file->e_type == ELF_ET_DYN)
+			dynl_link_image_to_image(image, image);
+		kfree(image, sizeof(elf_loaded_image));
 	}else if(ubi_kernel_type == 2){
 		pe_file* file = mz_get_pe(ubi_kernel_location);
 
 		pe_section_header* sections = pe_get_sections(file);
 		if(sections == 0)
 			FERROR(TSX_INVALID_FORMAT);
-		size_t minAddr = SIZE_MAX;
-		size_t maxAddr = 0;
-		for(size_t i = 0; i < file->p_sections; i++){
-			if(sections[i].ps_vaddr < minAddr)
-				minAddr = sections[i].ps_vaddr;
-			if(sections[i].ps_vaddr + sections[i].ps_vsize > maxAddr)
-				maxAddr = sections[i].ps_vaddr + sections[i].ps_vsize;
-		}
-		if(minAddr == SIZE_MAX)
-			FERROR(TSX_ERROR);
-		ubi_kernel_base = minAddr;
-		status = ubi_relocate(minAddr, maxAddr);
+		status = ubi_relocate(ubi_kernel_base, ubi_kernel_top);
 		CERROR();
 		file = mz_get_pe(ubi_kernel_location); // file location may have been changed by ubi_relocate
 		sections = pe_get_sections(file);
+
 		for(int i = 0; i < file->p_sections; i++){
 			void* secLoc = mmgr_alloc_block_sequential(sections[i].ps_vsize);
 			if(!secLoc)
@@ -436,6 +468,19 @@ status_t ubi_create_mem_table(ubi_k_mem_table* table){
 		btable->stackSize = table->stackSize;
 
 		kernel_move_stack((size_t) btable->stackLocation, btable->stackSize);
+
+		if((table->flags & 0x1) && ubi_kernel_type == 1 && ((elf_file*) ubi_kernel_location)->e_type == ELF_ET_DYN){ // KASLR bit
+			size_t kernelSize = ubi_kernel_top - ubi_kernel_base;
+			if(kernelSize > table->kaslrSize){
+				log_error("Kernel size is larger than kaslrSize\n");
+				FERROR(TSX_ERROR);
+			}
+			if(kernelSize + table->kernelBase < table->kernelBase){ // means it wrapped around and kernelSize is too large
+				log_error("Kernel size is too large (kernelBase is too high)\n");
+				FERROR(TSX_ERROR);
+			}
+			ubi_kernel_offset = ubi_get_random_kernel_offset((size_t) table->kernelBase, table->kaslrSize);
+		}
 	}else{
 		btable->heapLocation = 0;
 		btable->heapSize = 0;
@@ -573,7 +618,12 @@ status_t ubi_create_module_table(ubi_k_module_table* table){
 	if(table){
 		log_debug("Table %Y @ %Y\n", (size_t) table->hdr.magic, (size_t) table);
 		for(size_t i = 0; i < table->length; i++){
-			char* akpath = ubi_get_file_addr((size_t) table->modules[i].path);
+			char* akpath = NULL;
+			if(table->modules[i].path == 0 && ubi_kernel_type == 1){
+				akpath = ubi_get_file_addr(ubi_get_elf_reldyn_var_addr_f((size_t) (&table->modules[i].path)));
+			}else{
+				akpath = ubi_get_file_addr((size_t) (table->modules[i].path));
+			}
 			size_t readpathlen = strlen(akpath) + 16;
 			char* readpath = kmalloc(readpathlen);
 			snprintf(readpath, readpathlen, "%s%s", kernelPartition, akpath);
@@ -782,7 +832,7 @@ status_t ubi_post_init(){
 
 	log_debug("ubi_b_root_table=%Y\n", (size_t) ubi_root);
 
-	((ubi_b_mem_table*) ubi_srv_getTable(UBI_B_MEM_MAGIC))->kernelBase = (void*) ubi_kernel_base;
+	((ubi_b_mem_table*) ubi_srv_getTable(UBI_B_MEM_MAGIC))->kernelBase = (void*) (ubi_kernel_base + ubi_kernel_offset);
 
 	if(ubi_clearScreen){
 		clearScreen(0x7);
@@ -796,9 +846,9 @@ status_t ubi_post_init(){
 	if(!buf)
 		FERROR(TSX_OUT_OF_MEMORY);
 	size_t wrlen = 0;
-	mmgr_gen_mmap(buf, totallen * sizeof(mmap_entry), &wrlen);
+	totallen = mmgr_gen_mmap(buf, totallen * sizeof(mmap_entry), &wrlen);
 	log_debug("Memory map contains %u entries\n", wrlen);
-	if(wrlen + 1 < totallen)
+	if(wrlen < totallen)
 		FERROR(TSX_ERROR);
 
 	// rewrite type values
@@ -830,7 +880,7 @@ status_t ubi_post_init(){
 ubi_status_t ubi_call_kernel(){
 	if(ubi_kernel_type == 1){
 		elf_file* file = ubi_kernel_location;
-		return ((ubi_status_t (UBI_ELF_CALLCONV *) (ubi_b_root_table*))(file->e_entry))(ubi_root);
+		return ((ubi_status_t (UBI_ELF_CALLCONV *) (ubi_b_root_table*))(file->e_entry + ubi_kernel_offset))(ubi_root);
 	}else if(ubi_kernel_type == 2){
 		pe_file* file = mz_get_pe(ubi_kernel_location);
 		return ((ubi_status_t (UBI_PE_CALLCONV *) (ubi_b_root_table*))((size_t) file->po_entry))(ubi_root);
@@ -862,6 +912,38 @@ void* ubi_get_file_addr(size_t vaddr){
 		}
 	}
 	return NULL;
+}
+
+size_t ubi_get_elf_reldyn_var_addr_f(size_t addr){ // gets rela addend for a variable at addr in file image
+	elf_file* file = ubi_kernel_location;
+	elf_ph* ph = elf_get_ph(file);
+
+	size_t vaddr = 0;
+	for(int i = 0; i < file->e_phnum; i++){
+		if(ph[i].p_type != ELF_PH_TYPE_LOAD)
+			continue;
+		if(addr >= ph[i].p_offset + (size_t) file && addr <= ph[i].p_offset + (size_t) file + ph[i].p_filesz){
+			vaddr = (addr - ph[i].p_offset - (size_t) file + ph[i].p_vaddr);
+		}
+	}
+	if(!vaddr)
+		return 0;
+
+	return ubi_get_elf_reldyn_var_addr(vaddr);
+}
+
+size_t ubi_get_elf_reldyn_var_addr(size_t addr){ // gets rela addend for a variable at final address addr
+	elf_file* file = ubi_kernel_location;
+	elf_sh* reldynsec = elf_get_sh_entry(file, ".rela.dyn");
+	if(!reldynsec)
+		return 0;
+	dynl_rela* rela = (dynl_rela*) (reldynsec->sh_offset + (size_t) file);
+	for(int i = 0; i < reldynsec->sh_size / sizeof(dynl_rela); i++){
+		if(rela[i].r_offset == addr){
+			return rela[i].r_addend;
+		}
+	}
+	return 0;
 }
 
 void ubi_set_checksum(ubi_b_table_header* table, size_t totalTableSize){
@@ -903,7 +985,11 @@ ubi_table_header* ubi_get_kernel_table(uint64_t magic){
 	while(table){
 		if(table->magic == magic)
 			return table;
-		table = ubi_get_file_addr((size_t) (table->nextTable));
+		if(table->nextTable == 0 && ubi_kernel_type == 1){ // is ELF file and the address is written to addends in .rela (not here, because it is 0)
+			table = ubi_get_file_addr(ubi_get_elf_reldyn_var_addr_f((size_t) (&table->nextTable)));
+		}else{
+			table = ubi_get_file_addr((size_t) (table->nextTable));
+		}
 	}
 	return NULL;
 }
@@ -941,6 +1027,12 @@ uint32_t ubi_convert_to_ubi_memtype(uint32_t memtype){
 		case MMGR_MEMTYPE_OS: return UBI_MEMTYPE_OS;
 		default: return UBI_MEMTYPE_RESERVED;
 	}
+}
+
+size_t ubi_get_random_kernel_offset(size_t kernelBase, size_t kaslrSize){
+	size_t offset = arch_rand(kaslrSize - (ubi_kernel_top - ubi_kernel_base));
+	offset -= offset & 0xfff; // randomization is page aligned
+	return kernelBase + offset;
 }
 
 
