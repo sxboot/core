@@ -288,6 +288,10 @@ void cli_command_dbgrand(uint8_t dest, char* args){
 	cli_printf(dest, "%u\n", kernel_pseudorandom(SIZE_MAX));
 }
 
+void cli_command_dbgtime(uint8_t dest, char* args){
+	cli_printf(dest, "%u\n", (size_t) arch_real_time());
+}
+
 #ifdef ARCH_UPSTREAM_x86
 void cli_command_e820map(uint8_t dest, char* args){
 	mmgr_arch_mmap_entry* addr = 0;

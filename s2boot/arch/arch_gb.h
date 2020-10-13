@@ -42,5 +42,7 @@ void arch_relocation(size_t oldAddr, size_t newAddr);
 
 size_t arch_rand(size_t max);
 
+uint64_t arch_real_time();
+
 
 #endif /* __ARCH_GB_H__ */

@@ -24,6 +24,7 @@
 #include <x86/serial.h>
 #include <x86/irq.h>
 #include <x86/pic.h>
+#include <x86/rtc.h>
 #include <x86/x86.h>
 #include <arch_gb.h>
 
@@ -117,6 +118,19 @@ void arch_relocation(size_t oldAddr, size_t newAddr){
 
 size_t arch_rand(size_t max){
 	return kernel_pseudorandom(max);
+}
+
+
+uint64_t arch_real_time(){
+	uint16_t year;
+	uint8_t month, day, hour, minute, second;
+	rtc_get_time(&year, &month, &day, &hour, &minute, &second);
+	if(year >= 1970)
+		year -= 1970;
+	else
+		year += 30;
+	return (size_t) year * 31536000 + (size_t) month * 2592000 /* 30 days as average number of days per month (this doesnt have to be accurate) */
+		+ (size_t) day * 86400 + (size_t) hour * 3600 + (size_t) minute * 60 + (size_t) second;
 }
 
 

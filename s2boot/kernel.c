@@ -212,6 +212,12 @@ status_t m_init(){
 	CERROR();
 	arch_on_timer_fire(&m_on_timer);
 
+	kernel_pseudorandom_seed((size_t) arch_real_time());
+	// add some more "randomness"
+	for(size_t i = 0; i < kernel_pseudorandom(100); i++){
+		kernel_pseudorandom(1);
+	}
+
 	status = msio_init();
 	CERROR();
 
