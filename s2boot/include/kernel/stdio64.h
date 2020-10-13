@@ -44,6 +44,7 @@ void printlns(char* string, uint8_t attr);
 
 void printChar(char ch, uint8_t attr);
 void printChar_nlog(char ch, uint8_t attr);
+void printSerialChar(char ch);
 void delChar();
 void printAt(char* string, uint8_t attr, size_t x, size_t y);
 void printCharAt(char ch, uint8_t attr, size_t x, size_t y);

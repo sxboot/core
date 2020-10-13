@@ -29,6 +29,13 @@ int printf(const char* format, ...){
 	va_list parameters;
 	va_start(parameters, format);
 
+	int w = vprintf(format, parameters);
+
+	va_end(parameters);
+	return w;
+}
+
+int vprintf(const char* format, va_list parameters){
 	int written = 0;
 	uint8_t color = 0x7;
 
@@ -94,7 +101,6 @@ int printf(const char* format, ...){
 			written++;
 		}
 	}
-	va_end(parameters);
 	return written;
 }
 

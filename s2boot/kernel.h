@@ -126,7 +126,6 @@ char* m_resolve_unknown_symbol(size_t addr, size_t* functionOffsetWrite);
 void m_on_timer();
 
 void m_poll_events();
-status_t m_add_event(void (*func), size_t arg);
 
 status_t m_upstream_callback(size_t num, size_t arg0, size_t arg1, size_t arg2);
 

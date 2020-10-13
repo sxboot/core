@@ -30,6 +30,8 @@ static uint16_t comPort = 0;
 static void (*serial_on_key)(uint8_t c) = NULL;
 static uint8_t comBuf = 0;
 
+static bool inputReceived = FALSE;
+
 status_t serial_init(uint32_t baud){
 	status_t status = 0;
 	// probe ports
@@ -48,15 +50,17 @@ status_t serial_init(uint32_t baud){
 
 	uint16_t divisor = 115200 / baud;
 	// http://www.roboard.com/Files/Reg/Serial_Port_Registers.pdf
-	x86_outb(comPorts[comIndex] + 3, 0); // line control: disable DLAB
-	x86_outb(comPorts[comIndex] + 1, 0); // interrupt enable register: disable interrupts
-	x86_outb(comPorts[comIndex] + 3, 0x80); // line control: enable DLAB
-	x86_outb(comPorts[comIndex] + 0, (uint8_t) divisor); // line control: enable DLAB
-	x86_outb(comPorts[comIndex] + 1, (uint8_t) (divisor >> 8)); // line control: enable DLAB
-	x86_outb(comPorts[comIndex] + 3, 0x03); // line control: disable DLAB, SCN = 8 bits
-	x86_outb(comPorts[comIndex] + 2, 0x07); // fifo control: TL = 1 byte, clear and enable fifos
-	x86_outb(comPorts[comIndex] + 4, 0x0b); // modem control: irq enable
-	x86_outb(comPorts[comIndex] + 1, 0x01); // interrupt enable register: enable received data
+	x86_outb(comPort + 3, 0); // line control: disable DLAB
+	x86_outb(comPort + 1, 0); // interrupt enable register: disable interrupts
+	x86_outb(comPort + 3, 0x80); // line control: enable DLAB
+	x86_outb(comPort + 0, (uint8_t) divisor); // line control: enable DLAB
+	x86_outb(comPort + 1, (uint8_t) (divisor >> 8)); // line control: enable DLAB
+	x86_outb(comPort + 3, 0x03); // line control: disable DLAB, SCN = 8 bits
+	x86_outb(comPort + 2, 0x07); // fifo control: TL = 1 byte, clear and enable fifos
+	x86_outb(comPort + 4, 0x0b); // modem control: irq enable
+	x86_outb(comPort + 1, 0x01); // interrupt enable register: enable received data
+
+	reloc_ptr((void**) &serial_on_key);
 	_end:
 	return status;
 }
@@ -74,20 +78,36 @@ void serial_on_input(void (*listener)(uint8_t c)){
 }
 
 void serial_write(uint8_t data){
-	x86_outb(comPorts[comIndex], data);
+	if(!comPort)
+		return;
+	size_t wait_timeout = arch_time();
+	while(!(x86_inb(comPort + 5) & 0x20) && arch_time() - wait_timeout < 100)
+		arch_sleep(10);
+	if(arch_time() - wait_timeout >= 100){
+		return;
+	}
+	x86_outb(comPort, data);
+}
+
+bool serial_input(){
+	return inputReceived;
 }
 
 
 void __attribute__ ((interrupt)) serial_int(idt_interrupt_frame* frame){
 	pic_hw_int();
-	uint8_t iir = x86_inb(comPorts[comIndex] + 2); // int identification register
-	if((iir & 0x6) == 0x4 /* received data */){
-		uint8_t data = x86_inb(comPorts[comIndex]);
-		if(serial_on_key){
-			serial_on_key(data);
-			serial_clear_buf();
+	inputReceived = TRUE;
+	if(comPort){
+		uint8_t iir = x86_inb(comPort + 2); // int identification register
+		if((iir & 0x6) == 0x4 /* received data */){
+			uint8_t data = x86_inb(comPort);
+			if(serial_on_key){
+				serial_on_key(data);
+				serial_clear_buf();
+			}
 		}
 	}
 	pic_send_eoi(0);
 }
+
 

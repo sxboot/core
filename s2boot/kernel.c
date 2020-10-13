@@ -34,6 +34,7 @@
 #include <kernel/kutil.h>
 #include <kernel/list.h>
 #include <kernel/serial.h>
+#include <kernel/cli.h>
 #include "kernel.h"
 
 
@@ -53,9 +54,6 @@ static uint8_t m_state = 0;
 static uint8_t m_menu_selected = 0;
 static bool m_menu_autoboot = TRUE;
 static size_t m_menu_counter = 0;
-
-static char* m_console_text;
-static uint16_t m_console_text_length = 0;
 
 
 static char bootDriveType[5];
@@ -202,14 +200,12 @@ status_t m_init(){
 	// this is not required anymore
 	mmgr_free_mem_region(s1data->s2bootAddress, s1data->s2bootSize);
 
-	m_console_text = (char*) kmalloc(MMGR_BLOCK_SIZE);
-	if(m_console_text == 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	reloc_ptr((void**) &m_console_text);
+	status = cli_init();
+	CERROR();
 
 	status = arch_platform_initialize();
 	CERROR();
-	status = arch_set_timer(100);
+	status = arch_set_timer(1000);
 	CERROR();
 	arch_on_timer_fire(&m_on_timer);
 
@@ -549,6 +545,7 @@ status_t m_init_reloc_stack(){
 
 status_t m_select(){
 	kb_on_keypress(NULL);
+	serial_on_input(cli_serial_key);
 	show_menu:
 	m_show_menu();
 	while(1){
@@ -580,6 +577,7 @@ status_t m_select(){
 			m_poll_events();
 		}
 	}
+	serial_on_input(NULL);
 	m_reset_state();
 	return 0;
 }
@@ -639,7 +637,7 @@ void m_menu_paint(){
 	}
 	printAt("Use arrow keys \x18\x19 to select", 0xf, 0, 19);
 	printAt("Press ENTER to boot selected entry", 0xf, 0, 20);
-	printAt("Press C to enter console", 0xf, 0, 21);
+	printAt("Press C to enter CLI", 0xf, 0, 21);
 	for(int i = 0; i < 80; i++)
 		printCharAt(0x20, 0x7, i, 23);
 	if(m_menu_autoboot){
@@ -660,8 +658,8 @@ void m_start_console(){
 		return;
 	m_state = KERNEL_STATE_CONSOLE;
 	printf("\nType &fhelp&7 for a list of commands\n");
-	m_console_reset();
-	kb_on_keypress(m_console_on_key);
+	cli_console_reset();
+	kb_on_keypress(cli_console_key);
 }
 
 void m_close_console(){
@@ -671,173 +669,20 @@ void m_close_console(){
 	m_state = KERNEL_STATE_RUN;
 }
 
-void m_console_on_key(uint16_t c){
-	if(c == KEY_ENTER){
-		m_console_text[m_console_text_length] = 0;
-		printf("\n");
-		m_console_command(m_console_text);
-		if(m_state == KERNEL_STATE_CONSOLE){
-			m_console_reset();
-		}
-	}else if(c == KEY_BACKSPACE){
-		if(m_console_text_length <= 0)
-			return;
-		m_console_text_length--;
-		m_console_text[m_console_text_length] = 0;
-		delChar();
-	}else{
-		if(m_console_text_length >= MMGR_BLOCK_SIZE - 8)
-			return;
-		m_console_text[m_console_text_length] = (char) c;
-		m_console_text_length++;
-		printChar((char) c, 0x7);
-	}
+void cli_command_menu(uint8_t dest, char* args){
+	m_reset_state();
+	m_show_menu();
 }
 
-void m_console_reset(){
-	m_console_text_length = 0;
-	m_console_text[m_console_text_length] = 0;
-	printNlnr();
-	printf("> ");
-}
-
-void m_console_command(char* s){
-	if(strlen(s) < 1)
+void cli_command_boot(uint8_t dest, char* args){
+	uint8_t num = util_str_to_int(args);
+	if(num >= PARSE_MAX_ENTRIES){
+		cli_printf(dest, "&cInvalid number: %s\n", args);
 		return;
-	for(int i = 0; i < strlen(s); i++){
-		if(s[i] == 0 || s[i] == ' '){
-			s[i] = 0;
-			break;
-		}
 	}
-	if(util_str_equals(s, "help")){
-		printf("Builtin commands:\n&fhelp&7: shows this list\n&fmenu&7: returns to menu\n&fboot <index>&7: boots the entry with the given index starting at 0\n\
-			&fmem&7: Shows memory usage information\n&fe820map&7: shows the e820 memory map\n");
-	}else if(util_str_equals(s, "menu")){
-		m_reset_state();
-		m_show_menu();
-	}else if(util_str_equals(s, "boot")){
-		uint8_t num = util_str_to_int(s + 5);
-		if(num >= PARSE_MAX_ENTRIES){
-			printf("&cInvalid number: %s\n", s + 5);
-			return;
-		}
-		m_menu_selected = num;
-		m_menu_counter = 0;
-		m_menu_autoboot = TRUE;
-	}else if(util_str_equals(s, "mem")){
-		printf("Total memory: %uMiB\n", mmgr_get_total_memory() / 1024 / 1024);
-		printf("Used memory: %u/%uKiB (%u of %u allocatable blocks)\n", mmgr_get_used_mem_kib(), mmgr_get_total_blocks() * MMGR_BLOCK_SIZE / 1024,
-			mmgr_get_used_blocks(), mmgr_get_total_blocks());
-		printf("   blocks: %u reserved, %u allocated, %u paging\n", mmgr_get_used_blocks_reserved(), mmgr_get_used_blocks_alloc(), mmgr_get_used_blocks_paging());
-		size_t heapMem = 0;
-		size_t heapBlocks = 0;
-		kmem(&heapMem, &heapBlocks);
-		size_t heapRealMem = heapBlocks * MMGR_BLOCK_SIZE / 1024;
-		printf("Heap: %uKiB / %u blocks (%uKiB, %u%%)\n", heapMem, heapBlocks, heapRealMem, heapMem * 100 / heapRealMem);
-		printf("Other: %u relocatable pointers\n", m_reloc_list->length);
-	}else if(util_str_equals(s, "dbgstack")){
-		kernel_print_stack_trace();
-	}else if(util_str_equals(s, "dbgreloc")){
-		char* numstr = s + 9;
-		size_t num = util_str_to_int(numstr);
-		printf("Reloc to %Y\n", num);
-		status_t status = m_add_event(kernel_relocate, num);
-		if(status != TSX_SUCCESS){
-			printf("&cError %u (%s)\n", status, errcode_get_name(status));
-		}
-#ifdef ARCH_UPSTREAM_x86
-	}else if(util_str_equals(s, "e820map")){
-		mmgr_arch_mmap_entry* addr = 0;
-		uint16_t length = 0;
-		mmgr_get_system_map(&addr, &length);
-		for(int i = 0; i < length; i++){
-			printf("%Y - %Y (%uKiB, type %u)\n", (size_t) addr[i].addr, (size_t) (addr[i].addr + addr[i].size - 1), (size_t) (addr[i].size / 1024), (size_t) addr[i].type);
-		}
-#endif
-	}else if(util_str_equals(s, "dbgvid")){
-		char* numstr = s + 7;
-		size_t num = util_str_to_int(numstr);
-		status_t status = 0;
-		if(num == 1){
-			status = kernel_set_video(640, 480, 32, TRUE);
-		}else if(num == 3){
-			status = kernel_set_video(1024, 768, 32, TRUE);
-		}else if(num == 4){
-			status = kernel_set_video(1280, 1024, 32, TRUE);
-		}else if(num == 5){
-			status = kernel_set_video(1600, 900, 32, TRUE);
-		}else if(num == 6){
-			status = kernel_set_video(320, 200, 32, TRUE);
-		}else if(num == 7){
-			status = kernel_set_video(720, 480, 32, TRUE);
-		}else if(num == 8){
-			status = kernel_set_video(80, 25, 16, FALSE);
-		}else if(num == 9){
-			status = kernel_set_video(80, 60, 16, FALSE);
-		}else{ // 2, default
-			status = kernel_set_video(800, 600, 32, TRUE);
-		}
-		printf("status %u\n", (size_t) status);
-		kernel_print_error_trace();
-	}else if(util_str_equals(s, "memmap")){
-		mmap_entry* addr = kmalloc(MMGR_BLOCK_SIZE);
-		size_t length;
-		mmgr_gen_mmap(addr, MMGR_BLOCK_SIZE, &length);
-		for(int i = 0; i < length; i++){
-			printf("%Y - %Y (%uKiB, type %u)\n", addr[i].addr, addr[i].addr + addr[i].size - 1, addr[i].size / 1024, (size_t) addr[i].type);
-		}
-		kfree(addr, MMGR_BLOCK_SIZE);
-	}else if(util_str_equals(s, "vmemmap")){
-		mmap_entry* addr = kmalloc(MMGR_BLOCK_SIZE);
-		size_t length;
-		vmmgr_gen_vmmap(addr, MMGR_BLOCK_SIZE, &length);
-		for(int i = 0; i < length; i++){
-			printf("%Y - %Y (%uKiB)\n", addr[i].addr, addr[i].addr + addr[i].size - 1, addr[i].size / 1024);
-		}
-		kfree(addr, MMGR_BLOCK_SIZE);
-	}else if(util_str_equals(s, "dbgdrive")){
-		char* msg = kernel_write_boot_file(s + 9);
-		puts(msg);
-		kfree(msg, strlen(msg));
-	}else if(util_str_equals(s, "bootdrive")){
-		puts(bootPartLabel);
-	}else if(util_str_equals(s, "cat")){
-		char* path = kernel_write_boot_file(s + 4);
-		size_t raddr = 0;
-		size_t fileSize = 0;
-		status_t status = kernel_read_file(path, &raddr, &fileSize);
-		kfree(path, strlen(path));
-		printf("File at %Y (%u bytes):\n\n", raddr, fileSize);
-		for(size_t i = 0; i < fileSize; i++){
-			printChar(*((char*) (raddr + i)), 0x7);
-		}
-		kfree((void*) raddr, fileSize);
-		if(status != TSX_SUCCESS){
-			printf("Error %u (%s)\n", (size_t) status, errcode_get_name(status));
-			kernel_print_error_trace();
-		}
-	}else if(util_str_equals(s, "ls")){
-		char* path = kernel_write_boot_file(s + 3);
-		list_array* list = NULL;
-		status_t status = vfs_list_dir(path, &list);
-		kfree(path, strlen(path));
-		if(status != TSX_SUCCESS)
-			goto _ls_error;
-		printf("Directory (%u entries)\n", list->length);
-		for(size_t i = 0; i < list->length; i++){
-			printf("%s\n", (char*) list->base[i]);
-			kfree(list->base[i], strlen(list->base[i]));
-		}
-		list_array_delete(list);
-		_ls_error:
-		if(status != TSX_SUCCESS){
-			printf("Error %u (%s)\n", (size_t) status, errcode_get_name(status));
-			kernel_print_error_trace();
-		}
-	}else{
-		printf("Unknown command\n");
-	}
+	m_menu_selected = num;
+	m_menu_counter = 0;
+	m_menu_autoboot = TRUE;
 }
 
 
@@ -1169,16 +1014,6 @@ void m_poll_events(){
 	}
 }
 
-status_t m_add_event(void (*func), size_t arg){
-	event_t* event = kmalloc(sizeof(event_t));
-	if(!event)
-		return TSX_OUT_OF_MEMORY;
-	event->funcptr = func;
-	event->arg = arg;
-	list_array_push(m_event_queue, event);
-	return TSX_SUCCESS;
-}
-
 
 status_t m_upstream_callback(size_t num, size_t arg0, size_t arg1, size_t arg2){
 	status_t status = 0;
@@ -1281,6 +1116,24 @@ void kernel_get_current_reloc(size_t* oldAddr, size_t* newAddr){
 		*oldAddr = cRelocOldAddr;
 	if(newAddr)
 		*newAddr = cRelocNewAddr;
+}
+
+size_t kernel_get_reloc_ptr_count(){
+	return m_reloc_list->length;
+}
+
+status_t kernel_add_event(void (*func), size_t arg){
+	event_t* event = kmalloc(sizeof(event_t));
+	if(!event)
+		return TSX_OUT_OF_MEMORY;
+	event->funcptr = func;
+	event->arg = arg;
+	list_array_push(m_event_queue, event);
+	return TSX_SUCCESS;
+}
+
+void kernel_stop_autoboot(){
+	m_menu_autoboot = FALSE;
 }
 
 

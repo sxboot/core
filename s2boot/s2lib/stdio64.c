@@ -17,6 +17,7 @@
 #include <klibc/stdint.h>
 #include <klibc/stdbool.h>
 #include <klibc/string.h>
+#include <kernel/serial.h>
 #include <kernel/stdio64.h>
 #include <arch/stdio64.h>
 
@@ -342,6 +343,7 @@ void printlns(char* string, uint8_t attr){
 
 void printChar(char ch, uint8_t attr){
 	printChar_nlog(ch, attr);
+	printSerialChar(ch);
 	stdio64_text_log(ch, attr);
 }
 
@@ -358,6 +360,18 @@ void printChar_nlog(char ch, uint8_t attr){
 		}
 	}
 	updateCursor();
+}
+
+void printSerialChar(char ch){
+	if(!serial_input()) // only write to serial if we have received input from there (serial slows down output significantly)
+		return;
+	if(ch == 8){
+		serial_write(127);
+	}else{
+		if(ch == '\n')
+			serial_write('\r');
+		serial_write((uint8_t) ch);
+	}
 }
 
 void delChar(){
@@ -399,11 +413,12 @@ void printNln(){
 		shiftUp();
 	}
 	updateCursor();
+	printSerialChar(0xa);
 }
 
 void printNlnr(){
 	if(cursorX != 0)
-		printNln();
+		printChar(0xa, 0x7);
 }
 
 void shiftUp(){
@@ -477,9 +492,7 @@ void updateLoadingWheel(){
 
 
 void incCursorX(){
-	cursorX++;
-	updateCursor();
-	stdio64_text_log(0x20, 0);
+	printChar(0x20, 0x7);
 }
 
 void saveCursorPosition(){

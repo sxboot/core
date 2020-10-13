@@ -29,6 +29,9 @@ char* kernel_get_boot_drive_type();
 void kernel_get_stack_meta(size_t* stackLocation, size_t* stackSize);
 void kernel_get_brand(char** name, char** versionstr, char** version);
 void kernel_get_current_reloc(size_t* oldAddr, size_t* newAddr);
+size_t kernel_get_reloc_ptr_count();
+status_t kernel_add_event(void (*func), size_t arg);
+void kernel_stop_autoboot();
 
 status_t kernel_read_file_s(char* path, size_t dest);
 status_t kernel_read_file(char* path, size_t* destWrite, size_t* sizeWrite);

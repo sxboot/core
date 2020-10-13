@@ -23,6 +23,7 @@ void serial_clear_buf();
 uint8_t serial_get_buf();
 void serial_on_input(void (*listener)(uint8_t c));
 void serial_write(uint8_t data);
+bool serial_input();
 
 
 #endif /* __KERNEL_SERIAL_H__ */
