@@ -2915,7 +2915,7 @@ serviceCallback: ; di, si, dx, cx
 
 	lgdt	[gdt32temp]
 	mov		eax, cr0
-	or		eax, 1
+	or		eax, 0x80000001
 	mov		cr0, eax
 
 	jmp		0x8:.32bitprot

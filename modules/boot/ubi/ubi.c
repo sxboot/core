@@ -406,7 +406,7 @@ status_t ubi_create_mem_table(ubi_k_mem_table* table){
 	lastTable = (ubi_b_table_header*) btable;
 
 	if(table){
-		log_debug("Table %Y @ %Y\n", table->hdr.magic, (size_t) table);
+		log_debug("Table %Y @ %Y\n", (size_t) table->hdr.magic, (size_t) table);
 		if(table->heapSize > 0){
 			btable->heapSize = table->heapSize;
 			if(table->heapLocation == 0){
@@ -477,7 +477,7 @@ status_t ubi_create_vid_table(ubi_k_video_table* table){
 	lastTable = (ubi_b_table_header*) btable;
 
 	if(table){
-		log_debug("Table %Y @ %Y\n", table->hdr.magic, (size_t) table);
+		log_debug("Table %Y @ %Y\n", (size_t) table->hdr.magic, (size_t) table);
 		uint8_t kvidmode = table->flags & 0x3;
 		if(kvidmode == 1){
 			status = kernel_set_video(80, 25, 16, 0);
@@ -571,7 +571,7 @@ status_t ubi_create_module_table(ubi_k_module_table* table){
 	list_array_push(modlist, kentry);
 
 	if(table){
-		log_debug("Table %Y @ %Y\n", table->hdr.magic, (size_t) table);
+		log_debug("Table %Y @ %Y\n", (size_t) table->hdr.magic, (size_t) table);
 		for(size_t i = 0; i < table->length; i++){
 			char* akpath = ubi_get_file_addr((size_t) table->modules[i].path);
 			size_t readpathlen = strlen(akpath) + 16;
