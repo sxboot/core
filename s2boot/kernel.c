@@ -679,7 +679,6 @@ void m_console_on_key(uint16_t c){
 		m_console_text_length++;
 		printChar((char) c, 0x7);
 	}
-	kb_clear_buf();
 }
 
 void m_console_reset(){

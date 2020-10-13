@@ -119,7 +119,7 @@
 		{
 			"title": "Example configuration file",
 			"content": [
-				"$c[gray]# Set menu timeout to 5 seconds$$$n$c[blue]timeout$$ = $c[orange]5$$$n$c[blue]entry$$ $c[yellow]\"ELF file\"$$ {$n",
+				"$c[gray]# Set menu timeout to 5 seconds$$$n$c[blue]timeout$$ = $c[orange]5$$$n$c[blue]entry$$ $c[#fb0]\"ELF file\"$$ {$n",
 				"$t$c[blue]type$$ = image$n$t$c[gray]# Load file /boot/kernel from the second partition of the boot drive$$$n$t$c[blue]file$$ = /[DRIVE].1/boot/kernel$n}$n"
 			]
 		}

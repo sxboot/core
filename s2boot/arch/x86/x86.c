@@ -74,10 +74,6 @@ void arch_on_timer_fire(void (*handler)()){
 	timerHandler = handler;
 }
 
-void arch_on_keypress(void (*handler)(uint16_t c)){
-	kb_on_keypress(handler);
-}
-
 
 void arch_sleep(size_t ms){
 	pit_sleep(ms);

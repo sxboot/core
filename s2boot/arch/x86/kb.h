@@ -19,6 +19,7 @@
 #define KB_CONTROLLER_PORT 0x64
 
 
+void kb_keypress(uint8_t scanCode);
 void kb_int(idt_interrupt_frame* frame);
 
 

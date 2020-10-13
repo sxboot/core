@@ -28,7 +28,6 @@ status_t arch_platform_reset();
 
 status_t arch_set_timer(size_t frequency);
 void arch_on_timer_fire(void (*handler)());
-void arch_on_keypress(void (*handler)(uint16_t c));
 
 void arch_sleep(size_t ms);
 uint16_t arch_sleep_kb(size_t ms);

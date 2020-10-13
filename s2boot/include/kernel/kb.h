@@ -109,7 +109,6 @@ enum KB_ASCII{
 
 void kb_init();
 
-void kb_keypress(uint8_t scanCode);
 void kb_clear_buf();
 uint16_t kb_get_buf();
 void kb_on_keypress(void (*listener)(uint16_t c));

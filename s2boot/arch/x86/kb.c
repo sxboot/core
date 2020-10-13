@@ -9,6 +9,9 @@
  * is free of defects, merchantable, fit for a particular purpose or non-infringing.
  * The entire risk as to the quality and performance of the Covered Software is with You.
  */
+/*
+ * kb.c - Keyboard driver for x86.
+ */
 
 #include <klibc/stdlib.h>
 #include <klibc/stdint.h>
@@ -119,6 +122,19 @@ void kb_init(){
 	reloc_ptr((void**) &kb_on_key);
 }
 
+void kb_clear_buf(){
+	kb_buf = 0;
+}
+
+uint16_t kb_get_buf(){
+	return kb_buf;
+}
+
+void kb_on_keypress(void (*listener)(uint16_t c)){
+	kb_on_key = listener;
+}
+
+
 void kb_keypress(uint8_t scanCode){
 	uint16_t asciic = kb_scanc0_set[scanCode - 1];
 
@@ -160,6 +176,7 @@ void kb_keypress(uint8_t scanCode){
 				kb_buf = asciif;
 				if(kb_on_key != NULL){
 					kb_on_key(asciif);
+					kb_clear_buf();
 				}
 				break;
 			}
@@ -183,19 +200,6 @@ void kb_keypress(uint8_t scanCode){
 		}
 	}
 }
-
-void kb_clear_buf(){
-	kb_buf = 0;
-}
-
-uint16_t kb_get_buf(){
-	return kb_buf;
-}
-
-void kb_on_keypress(void (*listener)(uint16_t c)){
-	kb_on_key = listener;
-}
-
 
 void __attribute__ ((interrupt)) kb_int(idt_interrupt_frame* frame){
 	pic_hw_int();
