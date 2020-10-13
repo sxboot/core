@@ -118,8 +118,9 @@ static uint16_t kb_scanc0_set[] = {
 	KEY_F12
 };
 
-void kb_init(){
+status_t kb_init(){
 	reloc_ptr((void**) &kb_on_key);
+	return 0;
 }
 
 void kb_clear_buf(){

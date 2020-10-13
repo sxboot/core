@@ -176,7 +176,6 @@ status_t m_init(){
 	reloc_ptr((void**) &s1data->s2bootBase);
 	status = stdio64_init();
 	CERROR();
-	kb_init();
 	mmgr_reg_map_reloc_ptr();
 
 	reloc_ptr((void**) &m_error_stack);
@@ -243,6 +242,12 @@ status_t m_init(){
 	CERROR();
 
 	m_init_state = 4;
+
+	status = kb_init();
+	if(status != TSX_SUCCESS){
+		log_warn("Keyboard init failed: %u (%s)\n", (size_t) status, errcode_get_name(status));
+		status = 0;
+	}
 
 	status = serial_init(parse_get_data()->serialBaud);
 	if(status != TSX_SUCCESS){

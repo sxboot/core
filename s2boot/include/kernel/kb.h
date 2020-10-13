@@ -107,7 +107,7 @@ enum KB_ASCII{
 };
 
 
-void kb_init();
+status_t kb_init();
 
 void kb_clear_buf();
 uint16_t kb_get_buf();
