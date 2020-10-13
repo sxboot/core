@@ -349,7 +349,7 @@ void printChar(char ch, uint8_t attr){
 
 void printChar_nlog(char ch, uint8_t attr){
 	if(ch == 0xa){
-		printNln();
+		printNln_nlog();
 	}else if(ch == 0x8){
 		delChar();
 	}else{
@@ -406,6 +406,15 @@ void printCharAt(char ch, uint8_t attr, size_t x, size_t y){
 }
 
 void printNln(){
+	printChar(0xa, 0x7);
+}
+
+void printNlnr(){
+	if(cursorX != 0)
+		printChar(0xa, 0x7);
+}
+
+void printNln_nlog(){
 	cursorX = 0;
 	cursorY++;
 	if(cursorY >= totalY){
@@ -413,12 +422,6 @@ void printNln(){
 		shiftUp();
 	}
 	updateCursor();
-	printSerialChar(0xa);
-}
-
-void printNlnr(){
-	if(cursorX != 0)
-		printChar(0xa, 0x7);
 }
 
 void shiftUp(){

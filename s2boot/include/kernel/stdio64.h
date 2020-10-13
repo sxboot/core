@@ -49,6 +49,7 @@ void delChar();
 void printAt(char* string, uint8_t attr, size_t x, size_t y);
 void printCharAt(char ch, uint8_t attr, size_t x, size_t y);
 void printNln();
+void printNln_nlog();
 void printNlnr();
 void shiftUp();
 void shiftDown();
