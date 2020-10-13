@@ -713,13 +713,6 @@ void m_console_command(char* s){
 	if(util_str_equals(s, "help")){
 		printf("Builtin commands:\n&fhelp&7: shows this list\n&fmenu&7: returns to menu\n&fboot <index>&7: boots the entry with the given index starting at 0\n\
 			&fmem&7: Shows memory usage information\n&fe820map&7: shows the e820 memory map\n");
-		serial_write('h');
-		serial_write('e');
-		serial_write('l');
-		serial_write('l');
-		serial_write('o');
-		serial_write('\r');
-		serial_write('\n');
 	}else if(util_str_equals(s, "menu")){
 		m_reset_state();
 		m_show_menu();
