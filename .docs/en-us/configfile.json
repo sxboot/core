@@ -29,6 +29,15 @@
 						"Alternative paths to hard disk drivers and file system drivers on the $isxboot$$ partition.$n$n",
 						"$bDefault:$$$n/lib/disk/$n/lib/fs/"
 					]
+				},
+				{
+					"title": "serialBaud",
+					"content": [
+						"The serial port speed (baud).$n",
+						"Must be one of the standard serial port speeds supported by the computer ",
+						"(See $a[https://en.wikipedia.org/wiki/Serial_port#Settings]Wikipedia$$).$n$n",
+						"$bDefault: $$9600"
+					]
 				}
 			]
 		},

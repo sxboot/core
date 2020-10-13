@@ -33,6 +33,7 @@ status_t parse_file(char* file){
 	memset(&parse_data, 0, sizeof(parse_data_t));
 	parse_data.entries = parse_entries;
 	parse_data.timeout = 10; // default value
+	parse_data.serialBaud = 9600;
 	reloc_ptr((void**) &parse_data.entries);
 	memset(parse_entries, 0, sizeof(parse_entries));
 
@@ -86,13 +87,25 @@ status_t parse_file(char* file){
 				i += util_str_length_c_max(file + i, '=', 64) + 1;
 				while(*(file + i) == ' ')
 					i++;
-				uint64_t num = util_str_to_int(file + i);
+				size_t num = util_str_to_int(file + i);
 				if(num == SIZE_MAX){
 					printNlnr();
 					log_error("%s Invalid number: %s\n", parse_pref, file + i);
 					FERROR(TSX_PARSE_ERROR);
 				}
 				parse_data.timeout = num;
+				i += util_str_length(file + i);
+			}else if(util_str_startsWith(file + i, "serialBaud")){
+				i += util_str_length_c_max(file + i, '=', 64) + 1;
+				while(*(file + i) == ' ')
+					i++;
+				size_t num = util_str_to_int(file + i);
+				if(num == SIZE_MAX){
+					printNlnr();
+					log_error("%s Invalid number: %s\n", parse_pref, file + i);
+					FERROR(TSX_PARSE_ERROR);
+				}
+				parse_data.serialBaud = num;
 				i += util_str_length(file + i);
 			}else if(util_str_startsWith(file + i, "hdDrivers")){
 				i += util_str_length_c_max(file + i, '=', 64) + 1;

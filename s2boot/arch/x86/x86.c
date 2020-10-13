@@ -17,9 +17,11 @@
 #include <klibc/string.h>
 #include <klibc/stdio.h>
 #include <kernel/kb.h>
+#include <kernel/serial.h>
 #include <arch/idt.h>
 #include <arch/gdt.h>
 #include <x86/kb.h>
+#include <x86/serial.h>
 #include <x86/irq.h>
 #include <x86/pic.h>
 #include <x86/x86.h>
@@ -49,6 +51,8 @@ status_t arch_platform_initialize(){
 	pic_set_default_isrs(X86_HW_INT_BASE, X86_HW_INT_BASE + 8);
 	idt_set_isr(X86_HW_INT_BASE, 0x8, IDT_FLAGS_PRESENT | IDT_FLAGS_TYPE_INT_32, &x86_on_irq0);
 	idt_set_isr(X86_HW_INT_BASE + 1, 0x8, IDT_FLAGS_PRESENT | IDT_FLAGS_TYPE_INT_32, &kb_int);
+	idt_set_isr(X86_HW_INT_BASE + 3, 0x8, IDT_FLAGS_PRESENT | IDT_FLAGS_TYPE_INT_32, &serial_int);
+	idt_set_isr(X86_HW_INT_BASE + 4, 0x8, IDT_FLAGS_PRESENT | IDT_FLAGS_TYPE_INT_32, &serial_int);
 	pic_enable_interrupts();
 
 	_end:
