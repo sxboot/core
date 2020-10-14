@@ -38,8 +38,8 @@
 #include "kernel.h"
 
 
-#define VERSION_MAJOR 6
-#define VERSION_MINOR 2
+#define VERSION_MAJOR 7
+#define VERSION_MINOR 0
 
 
 static s1boot_data* s1data = 0;
