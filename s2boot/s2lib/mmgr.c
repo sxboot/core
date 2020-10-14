@@ -332,12 +332,16 @@ void* vmmgr_alloc_block_sequential(size_t size){
 }
 
 void vmmgr_map_pages_req(size_t usedMem){
-	if(usedMem + MMGR_BLOCK_SIZE * 8 /* keep at least 8 blocks free */ >= vmmgr_mappedMemory){
+	if(mmgr_alloc_map == NULL) // mmgr not initalized yet
+		return;
+	while(usedMem + MMGR_BLOCK_SIZE * 8 /* keep at least 8 blocks free */ >= vmmgr_mappedMemory){
 		size_t nMap = MIN(vmmgr_mappedMemory * 2, MMGR_USABLE_MEMORY);
 		for(size_t addr = vmmgr_mappedMemory; addr < nMap; addr += MMGR_BLOCK_SIZE){
 			vmmgr_map_page(addr, addr + vmmgr_membase);
 		}
 		vmmgr_mappedMemory = nMap;
+		if(nMap >= MMGR_USABLE_MEMORY)
+			break;
 	}
 }
 
