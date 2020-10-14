@@ -55,6 +55,13 @@ typedef struct ucallback_videomode{
 	size_t bytesPerLine;
 } ucallback_videomode;
 
+typedef struct ucallback_readdrive{
+	size_t num;
+	size_t numSectors;
+	size_t dest;
+	uint64_t lba;
+} ucallback_readdrive;
+
 typedef struct s3boot_data{
 	uint32_t magic; // 0x297f09ae
 	uint32_t s3mapStart;
@@ -74,6 +81,8 @@ typedef struct s3boot_map_entry{
 
 
 status_t m_init();
+status_t m_attach_firmware_disk_driver(char** firmwareDriveTypeWrite);
+status_t m_firmware_read(uint8_t number, uint64_t sector, uint16_t sectorCount, size_t dest);
 status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrite);
 status_t m_init_fs_driver(elf_file* file, int* listIndexWrite);
 status_t m_link_bdd();

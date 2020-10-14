@@ -221,12 +221,29 @@ status_t m_init(){
 	status = msio_init();
 	CERROR();
 
-	status = m_link_bdd();
+	char* firmwareDriveType;
+	status = m_attach_firmware_disk_driver(&firmwareDriveType);
 	CERROR();
+
+	status = m_link_bdd();
+	if(status != TSX_SUCCESS){
+		log_warn("BDD initialization failed: %u (%s)\n", (size_t) status, errcode_get_name(status));
+		kernel_print_error_trace();
+		goto _post_find_boot_drive;
+	}
 	//mmgr_free_mem_region(s1data->bddAddress, s1data->bddSize);
 
 	status = m_find_boot_drive();
-	CERROR();
+	_post_find_boot_drive:
+	if(status != TSX_SUCCESS){
+		log_warn("Failed to find boot drive using bdd.ko: %u (%s)\n", (size_t) status, errcode_get_name(status));
+		kernel_print_error_trace();
+		log_debug("Attempting to find boot drive using firmware disk driver\n");
+		memcpy((void*) bootDriveType, (void*) firmwareDriveType, 4);
+		status = m_find_boot_drive();
+		if(status != TSX_SUCCESS)log_error("Failed to find boot drive\n");
+		CERROR();
+	}
 
 	snprintf(bootDriveLabel, 16, "%s%u", bootDriveType, bootDriveNum);
 	snprintf(bootPartLabel, 16, "%s%u.%u", bootDriveType, bootDriveNum, s1data->bootPartN);
@@ -251,15 +268,43 @@ status_t m_init(){
 	status = kb_init();
 	if(status != TSX_SUCCESS){
 		log_warn("Keyboard init failed: %u (%s)\n", (size_t) status, errcode_get_name(status));
+		kernel_print_error_trace();
 		status = 0;
 	}
 
 	status = serial_init(parse_get_data()->serialBaud);
 	if(status != TSX_SUCCESS){
 		log_warn("Serial init failed: %u (%s)\n", (size_t) status, errcode_get_name(status));
+		kernel_print_error_trace();
 		status = 0;
 	}
 
+	_end:
+	return status;
+}
+
+status_t m_attach_firmware_disk_driver(char** firmwareDriveTypeWrite){
+	status_t status = 0;
+	char* firmwareDriveType;
+	status = m_upstream_callback(20, (size_t) &firmwareDriveType, 0, 0);
+	CERROR();
+	status = msio_attach_driver(firmwareDriveType, &m_firmware_read, NULL);
+	CERROR();
+	log_debug("Attached firmware driver: type=%s\n", firmwareDriveType);
+	if(firmwareDriveTypeWrite)
+		*firmwareDriveTypeWrite = firmwareDriveType;
+	_end:
+	return status;
+}
+
+status_t m_firmware_read(uint8_t number, uint64_t sector, uint16_t sectorCount, size_t dest){
+	ucallback_readdrive args;
+	args.num = number;
+	args.numSectors = sectorCount;
+	args.dest = dest;
+	args.lba = sector;
+	status_t status = m_upstream_callback(21, (size_t) &args, 0, 0);
+	CERROR();
 	_end:
 	return status;
 }
@@ -278,6 +323,13 @@ status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrit
 	address = kmalloc(size);
 	if(!address)
 		FERROR(TSX_OUT_OF_MEMORY);
+
+	int listIndex = m_add_elf_image(file, (size_t) address);
+	if(listIndex < 0)
+		FERROR(TSX_OUT_OF_MEMORY);
+	if(listIndexWrite)
+		*listIndexWrite = listIndex;
+
 	status = dynl_load_and_link_to_static_elf(file, (size_t) address, m_elf_images->base[m_elf_image_kernel_index] /* link against s2boot (kernel) */);
 	CERROR();
 	elf_symtab* initsymtab = elf_get_symtab_entry(file, "msio_init"); // optional
@@ -291,6 +343,8 @@ status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrit
 	if(typesymtab == 0)
 		FERROR(TSX_UNDEFINED_REFERENCE);
 	char* type = ((char* (*) ())(typesymtab->st_value + address))();
+	if(typeWrite)
+		*typeWrite = type;
 	if(initsymtab){
 		status = ((status_t (*) ())(initsymtab->st_value + address))();
 		CERROR();
@@ -299,14 +353,6 @@ status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrit
 		(MSIO_DRIVER_READ)(readsymtab->st_value + address),
 		(MSIO_DRIVER_WRITE)(writesymtab->st_value + address));
 	CERROR();
-
-	int listIndex = m_add_elf_image(file, (size_t) address);
-	if(listIndex < 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	if(listIndexWrite)
-		*listIndexWrite = listIndex;
-	if(typeWrite)
-		*typeWrite = type;
 	_end:
 	if(status != TSX_SUCCESS && address && size)
 		kfree(address, size);
@@ -327,6 +373,13 @@ status_t m_init_fs_driver(elf_file* file, int* listIndexWrite){
 	address = kmalloc(size);
 	if(!address)
 		FERROR(TSX_OUT_OF_MEMORY);
+
+	int listIndex = m_add_elf_image(file, (size_t) address);
+	if(listIndex < 0)
+		FERROR(TSX_OUT_OF_MEMORY);
+	if(listIndexWrite)
+		*listIndexWrite = listIndex;
+
 	status = dynl_load_and_link_to_static_elf(file, (size_t) address, m_elf_images->base[m_elf_image_kernel_index] /* link against s2boot (kernel) */);
 	CERROR();
 	elf_symtab* initsymtab = elf_get_symtab_entry(file, "vfs_init"); // optional
@@ -352,12 +405,6 @@ status_t m_init_fs_driver(elf_file* file, int* listIndexWrite){
 		(VFS_DRIVER_GET_FILE_SIZE)(fileSizesymtab->st_value + address),
 		(VFS_DRIVER_LIST_DIR)(listDirsymtab->st_value + address));
 	CERROR();
-
-	int listIndex = m_add_elf_image(file, (size_t) address);
-	if(listIndex < 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	if(listIndexWrite)
-		*listIndexWrite = listIndex;
 	_end:
 	if(status != TSX_SUCCESS && address && size)
 		kfree(address, size);
@@ -405,7 +452,7 @@ status_t m_find_boot_drive(){
 			goto _end;
 		}
 	}
-	log_error("Failed to find boot drive\n");
+	FERROR(TSX_NO_DEVICE);
 	_end:
 	if(buffer)
 		kfree(buffer, 4096);

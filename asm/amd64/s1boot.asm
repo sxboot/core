@@ -2879,6 +2879,7 @@ boot64:
 servMemBuf	dq	0
 
 reqBufStruct	dq	0
+; videomode
 reqWidth	dq	0
 reqHeight	dq	0
 reqBPP		dq	0
@@ -2886,6 +2887,12 @@ reqMode		dq	0
 reqResFramebuffer	dq	0
 reqResBytesPerLine	dq	0
 curVidMode	dw	0
+; read drive
+reqDIndex	dq	0
+reqSectorCount	dq	0
+reqDest		dq	0
+reqLBA		dq	0
+
 gdt64temp:
 	dw 0
 	dq 0
@@ -2936,6 +2943,10 @@ idt16:
 	dw 0x3ff
 	dd 0
 
+srvModeSwitchAddr	dw	0
+
+firmwareDriveName	db	"bios", 0
+
 ; services: (<di> - <description> (<up to 3 passed arguments>))
 ;  1 - upstream pre init (address to kmalloc)
 ;  2 - upstream init (<no args>)
@@ -2950,8 +2961,13 @@ serviceCallback: ; di, si, dx, cx
 	je		.uInit
 	cmp		rdi, 10
 	je		.setVideo
+	cmp		rdi, 20
+	je		.firmwareDriveGetName
+	cmp		rdi, 21
+	je		.firmwareDriveRead
 	mov		rax, 1
 	jmp		.end
+
 
 	.uPreInit:
 	mov		rdi, 0x1000
@@ -2967,8 +2983,10 @@ serviceCallback: ; di, si, dx, cx
 	mov		rax, 27 ; TSX_MEMORY_RESERVED
 	jmp		.end
 
+
 	.uInit:
 	jmp		.end
+
 
 	.setVideo:
 	mov		QWORD[reqBufStruct], rsi
@@ -2982,62 +3000,10 @@ serviceCallback: ; di, si, dx, cx
 	mov		QWORD[reqMode], rdx
 
 
-	; go back to 16 bit to use vbe
-	cli
-	sgdt	[gdt64temp]
-	sidt	[idt64temp]
-	mov		QWORD[stack64temp], rsp
-	mov		rsp, 0x7b00 ; set this in case the stack got relocated somewhere above 0xffff
-
-	lgdt	[gdt32]
-	bits 32
-	;disable paging
-	mov		eax, cr0
-	and		eax, 0x7fffffff
-	mov		cr0, eax
+	mov		WORD[srvModeSwitchAddr], .vbe_to16ret
+	jmp		to16
+	.vbe_to16ret:
 	bits 16
-	pushf
-	push	word 0x8
-	push	word .b1
-	iret
-	.b1:
-	bits 32
-	;disable long mode
-	mov		ecx, 0xc0000080
-	rdmsr
-	;LM bit
-	and		eax, 0xfffffeff
-	wrmsr
-
-	mov		eax, cr4
-	;PAE bit
-	and		eax, 0xffffffdf
-	mov		cr4, eax
-
-	lgdt	[gdt16]
-	jmp		0x8:.16bitprot
-	bits	16
-	.16bitprot:
-	mov		eax, 0x10
-	mov		ds, eax
-	mov		es, eax
-	mov		fs, eax
-	mov		gs, eax
-	mov		ss, eax
-
-	mov		eax, cr0
-	and		eax, 0x7ffffffe
-	mov		cr0, eax
-
-	jmp		0x0:.16bitreal
-	.16bitreal:
-	mov		ax, 0
-	mov		ds, ax
-	mov		es, ax
-	mov		fs, ax
-	mov		gs, ax
-	mov		ss, ax
-	lidt	[idt16]
 
 
 	cmp		BYTE[reqMode], 1
@@ -3160,6 +3126,177 @@ serviceCallback: ; di, si, dx, cx
 	.vbe_done:
 
 
+	mov		WORD[srvModeSwitchAddr], .vbe_from16ret
+	jmp		from16
+	.vbe_from16ret:
+	bits 64
+
+
+	mov		rsi, QWORD[reqBufStruct]
+	mov		rdx, QWORD[reqResFramebuffer]
+	mov		QWORD[rsi + 32], rdx ; write framebuffer address to struct
+	mov		rdx, QWORD[reqResBytesPerLine]
+	mov		QWORD[rsi + 40], rdx ; write framebuffer address to struct
+
+	mov		rax, QWORD[retCode]
+	jmp		.end
+
+
+	.firmwareDriveGetName:
+	mov		QWORD[rsi], firmwareDriveName
+	mov		rax, 0
+	jmp		.end
+
+
+	.firmwareDriveRead:
+	mov		QWORD[reqBufStruct], rsi
+	mov		rdx, QWORD[rsi]
+	mov		QWORD[reqDIndex], rdx
+	mov		rdx, QWORD[rsi + 8]
+	mov		QWORD[reqSectorCount], rdx
+	mov		rdx, QWORD[rsi + 16]
+	mov		QWORD[reqDest], rdx
+	mov		rdx, QWORD[rsi + 24]
+	mov		QWORD[reqLBA], rdx
+
+	cmp		QWORD[reqDIndex], 0x7f
+	jbe		.read_validD
+	mov		QWORD[retCode], 13 ; TSX_NO_DEVICE
+	jmp		.read_end
+	.read_validD:
+
+	mov		rcx, QWORD[reqSectorCount]
+	.readLoop:
+	push	rcx
+
+
+	mov		WORD[srvModeSwitchAddr], .read_to16ret
+	jmp		to16
+	.read_to16ret:
+	bits 16
+
+
+	mov		edx, DWORD[reqLBA]
+	mov		DWORD[dap_start_l], edx
+	mov		edx, DWORD[reqLBA + 4]
+	mov		DWORD[dap_start_h], edx
+
+	mov		WORD[dap_count], 1
+
+	mov		bx, WORD[servMemBuf]
+	mov		WORD[dap_buf_off], bx
+	mov		WORD[dap_buf_seg], 0
+
+	mov		ah, 0x42
+	mov		dl, BYTE[reqDIndex]
+	add		dl, 0x80
+	mov		si, dap_start
+	int		0x13
+	jc		.read_err
+
+	mov		WORD[retCode], 0
+	jmp		.read_done
+	.read_err:
+	mov		WORD[retCode], 19 ; TSX_IO_ERROR
+	.read_done:
+
+
+	mov		WORD[srvModeSwitchAddr], .read_from16ret
+	jmp		from16
+	.read_from16ret:
+	bits 64
+
+
+	pop		rcx
+	cmp		WORD[retCode], 0
+	jne		.read_end
+	inc		QWORD[reqLBA]
+	push	rcx
+	mov		rdi, QWORD[reqDest]
+	mov		rsi, QWORD[servMemBuf]
+	mov		rcx, 512
+	cld
+	rep		movsb
+	pop		rcx
+	add		QWORD[reqDest], 512
+	dec		rcx
+	jnz		.readLoop
+
+
+	.read_end:
+	mov		rax, QWORD[retCode]
+	jmp		.end
+
+
+	.end:
+	pop		rbp
+	ret
+
+
+to16:
+	bits 64
+	; go back to 16 bit to use vbe
+	cli
+	sgdt	[gdt64temp]
+	sidt	[idt64temp]
+	mov		QWORD[stack64temp], rsp
+	mov		rsp, 0x7b00 ; set this in case the stack got relocated somewhere above 0xffff
+
+	lgdt	[gdt32]
+	bits 32
+	;disable paging
+	mov		eax, cr0
+	and		eax, 0x7fffffff
+	mov		cr0, eax
+	bits 16
+	pushf
+	push	word 0x8
+	push	word .b1
+	iret
+	.b1:
+	bits 32
+	;disable long mode
+	mov		ecx, 0xc0000080
+	rdmsr
+	;LM bit
+	and		eax, 0xfffffeff
+	wrmsr
+
+	mov		eax, cr4
+	;PAE bit
+	and		eax, 0xffffffdf
+	mov		cr4, eax
+
+	lgdt	[gdt16]
+	jmp		0x8:.16bitprot
+	bits	16
+	.16bitprot:
+	mov		eax, 0x10
+	mov		ds, eax
+	mov		es, eax
+	mov		fs, eax
+	mov		gs, eax
+	mov		ss, eax
+
+	mov		eax, cr0
+	and		eax, 0x7ffffffe
+	mov		cr0, eax
+
+	jmp		0x0:.16bitreal
+	.16bitreal:
+	mov		ax, 0
+	mov		ds, ax
+	mov		es, ax
+	mov		fs, ax
+	mov		gs, ax
+	mov		ss, ax
+	lidt	[idt16]
+
+	mov		ax, WORD[srvModeSwitchAddr]
+	jmp		ax
+
+from16:
+	bits 16
 	lgdt	[gdt32]
 	mov		eax, cr0
 	or		eax, 1
@@ -3196,19 +3333,8 @@ serviceCallback: ; di, si, dx, cx
 	mov		rsp, QWORD[stack64temp]
 	lidt	[idt64temp]
 
-	mov		rsi, QWORD[reqBufStruct]
-	mov		rdx, QWORD[reqResFramebuffer]
-	mov		QWORD[rsi + 32], rdx ; write framebuffer address to struct
-	mov		rdx, QWORD[reqResBytesPerLine]
-	mov		QWORD[rsi + 40], rdx ; write framebuffer address to struct
-
-	mov		rax, QWORD[retCode]
-	jmp		.end
-
-	.end:
-	pop		rbp
-	ret
-
+	movzx	rax, WORD[srvModeSwitchAddr]
+	jmp		rax
 
 
 

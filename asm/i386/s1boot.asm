@@ -2650,6 +2650,7 @@ boot32:
 servMemBuf	dd	0
 
 reqBufStruct	dd	0
+; videomode
 reqWidth	dd	0
 reqHeight	dd	0
 reqBPP		dd	0
@@ -2657,6 +2658,12 @@ reqMode		dd	0
 reqResFramebuffer	dd	0
 reqResBytesPerLine	dd	0
 curVidMode	dw	0
+; read drive
+reqDIndex	dd	0
+reqSectorCount	dd	0
+reqDest		dd	0
+reqLBA		dq	0
+
 gdt32temp:
 	dw 0
 	dd 0
@@ -2707,6 +2714,10 @@ idt16:
 	dw 0x3ff
 	dd 0
 
+srvModeSwitchAddr	dw	0
+
+firmwareDriveName	db	"bios", 0
+
 ; services: (<di> - <description> (<up to 3 passed arguments>))
 ;  1 - upstream pre init (address to kmalloc)
 ;  2 - upstream init (<no args>)
@@ -2727,6 +2738,10 @@ serviceCallback: ; di, si, dx, cx
 	je		.uInit
 	cmp		edi, 10
 	je		.setVideo
+	cmp		edi, 20
+	je		.firmwareDriveGetName
+	cmp		edi, 21
+	je		.firmwareDriveRead
 	mov		eax, 1
 	jmp		.end
 
@@ -2760,37 +2775,10 @@ serviceCallback: ; di, si, dx, cx
 	mov		DWORD[reqMode], edx
 
 
-	; go back to 16 bit to use vbe
-	cli
-	sgdt	[gdt32temp]
-	sidt	[idt32temp]
-	mov		DWORD[stack32temp], esp
-	mov		esp, 0x7b00 ; set this in case the stack got relocated somewhere above 0xffff
-
-	lgdt	[gdt16]
-	jmp		0x8:.16bitprot
-	bits	16
-	.16bitprot:
-	mov		eax, 0x10
-	mov		ds, eax
-	mov		es, eax
-	mov		fs, eax
-	mov		gs, eax
-	mov		ss, eax
-
-	mov		eax, cr0
-	and		eax, 0x7ffffffe
-	mov		cr0, eax
-
-	jmp		0x0:.16bitreal
-	.16bitreal:
-	mov		ax, 0
-	mov		ds, ax
-	mov		es, ax
-	mov		fs, ax
-	mov		gs, ax
-	mov		ss, ax
-	lidt	[idt16]
+	mov		WORD[srvModeSwitchAddr], .vbe_to16ret
+	jmp		to16
+	.vbe_to16ret:
+	bits 16
 
 
 	cmp		BYTE[reqMode], 1
@@ -2913,6 +2901,160 @@ serviceCallback: ; di, si, dx, cx
 	.vbe_done:
 
 
+	mov		WORD[srvModeSwitchAddr], .vbe_from16ret
+	jmp		from16
+	.vbe_from16ret:
+	bits 32
+
+
+	mov		esi, DWORD[reqBufStruct]
+	mov		edx, DWORD[reqResFramebuffer]
+	mov		DWORD[esi + 16], edx ; write framebuffer address to struct
+	mov		edx, DWORD[reqResBytesPerLine]
+	mov		DWORD[esi + 20], edx ; write bytes per line to struct
+
+	mov		eax, DWORD[retCode]
+	jmp		.end
+
+
+	.firmwareDriveGetName:
+	mov		DWORD[esi], firmwareDriveName
+	mov		eax, 0
+	jmp		.end
+
+
+	.firmwareDriveRead:
+	mov		DWORD[reqBufStruct], esi
+	mov		edx, DWORD[esi]
+	mov		DWORD[reqDIndex], edx
+	mov		edx, DWORD[esi + 4]
+	mov		DWORD[reqSectorCount], edx
+	mov		edx, DWORD[esi + 8]
+	mov		DWORD[reqDest], edx
+	mov		edx, DWORD[esi + 12]
+	mov		DWORD[reqLBA], edx
+	mov		edx, DWORD[esi + 16]
+	mov		DWORD[reqLBA + 4], edx
+
+	cmp		DWORD[reqDIndex], 0x7f
+	jbe		.read_validD
+	mov		DWORD[retCode], 13 ; TSX_NO_DEVICE
+	jmp		.read_end
+	.read_validD:
+
+	mov		ecx, DWORD[reqSectorCount]
+	.readLoop:
+	push	ecx
+
+
+	mov		WORD[srvModeSwitchAddr], .read_to16ret
+	jmp		to16
+	.read_to16ret:
+	bits 16
+
+
+	mov		edx, DWORD[reqLBA]
+	mov		DWORD[dap_start_l], edx
+	mov		edx, DWORD[reqLBA + 4]
+	mov		DWORD[dap_start_h], edx
+
+	mov		WORD[dap_count], 1
+
+	mov		bx, WORD[servMemBuf]
+	mov		WORD[dap_buf_off], bx
+	mov		WORD[dap_buf_seg], 0
+
+	mov		ah, 0x42
+	mov		dl, BYTE[reqDIndex]
+	add		dl, 0x80
+	mov		si, dap_start
+	int		0x13
+	jc		.read_err
+
+	mov		WORD[retCode], 0
+	jmp		.read_done
+	.read_err:
+	mov		WORD[retCode], 19 ; TSX_IO_ERROR
+	.read_done:
+
+
+	mov		WORD[srvModeSwitchAddr], .read_from16ret
+	jmp		from16
+	.read_from16ret:
+	bits 32
+
+
+	pop		ecx
+	cmp		WORD[retCode], 0
+	jne		.read_end
+	cmp		DWORD[reqLBA], 0xffffffff
+	jne		.read_no_overflow
+	inc		DWORD[reqLBA + 4]
+	.read_no_overflow:
+	inc		DWORD[reqLBA]
+	push	ecx
+	mov		edi, DWORD[reqDest]
+	mov		esi, DWORD[servMemBuf]
+	mov		ecx, 512
+	cld
+	rep		movsb
+	pop		ecx
+	add		DWORD[reqDest], 512
+	dec		ecx
+	jnz		.readLoop
+
+
+	.read_end:
+	mov		eax, DWORD[retCode]
+	jmp		.end
+
+
+	.end:
+	pop		esi
+	pop		edi
+	pop		ebp
+	ret
+
+
+to16:
+	bits	32
+	; go back to 16 bit to use vbe
+	cli
+	sgdt	[gdt32temp]
+	sidt	[idt32temp]
+	mov		DWORD[stack32temp], esp
+	mov		esp, 0x7b00 ; set this in case the stack got relocated somewhere above 0xffff
+
+	lgdt	[gdt16]
+	jmp		0x8:.16bitprot
+	bits	16
+	.16bitprot:
+	mov		eax, 0x10
+	mov		ds, eax
+	mov		es, eax
+	mov		fs, eax
+	mov		gs, eax
+	mov		ss, eax
+
+	mov		eax, cr0
+	and		eax, 0x7ffffffe
+	mov		cr0, eax
+
+	jmp		0x0:.16bitreal
+	.16bitreal:
+	mov		ax, 0
+	mov		ds, ax
+	mov		es, ax
+	mov		fs, ax
+	mov		gs, ax
+	mov		ss, ax
+	lidt	[idt16]
+
+	mov		ax, WORD[srvModeSwitchAddr]
+	jmp		ax
+
+from16:
+	bits	16
 	lgdt	[gdt32temp]
 	mov		eax, cr0
 	or		eax, 0x80000001
@@ -2931,21 +3073,8 @@ serviceCallback: ; di, si, dx, cx
 	mov		esp, DWORD[stack32temp]
 	lidt	[idt32temp]
 
-	mov		esi, DWORD[reqBufStruct]
-	mov		edx, DWORD[reqResFramebuffer]
-	mov		DWORD[esi + 16], edx ; write framebuffer address to struct
-	mov		edx, DWORD[reqResBytesPerLine]
-	mov		DWORD[esi + 20], edx ; write bytes per line to struct
-
-	mov		eax, DWORD[retCode]
-	jmp		.end
-
-	.end:
-	pop		esi
-	pop		edi
-	pop		ebp
-	ret
-
+	movzx	eax, WORD[srvModeSwitchAddr]
+	jmp		eax
 
 
 
