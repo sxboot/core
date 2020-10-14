@@ -11,11 +11,12 @@ CC ?= clang
 LD ?= ld.lld
 NASM ?= nasm
 
+S2BOOTSRCDIR = ../$(ROOTS2BOOT)
 SRCDIR = .
 TMPDIR = ../$(ROOTBINDIR)/s2modtmp
 DESTDIR = ../$(ROOTBINDIR)/s2modules
 
-CCFLAGS = -target $(ARCH)-pc-none-elf -fPIC -m$(BITS) -mno-sse -mno-red-zone -ffreestanding -I../$(ROOTS2BOOT)/include -I../$(ROOTS2BOOT)/arch/$(ARCH) -I../$(ROOTS2BOOT)/arch \
+CCFLAGS = -target $(ARCH)-pc-none-elf -fPIC -m$(BITS) -mno-sse -mno-red-zone -ffreestanding -I$(S2BOOTSRCDIR)/include -I$(S2BOOTSRCDIR)/arch/$(ARCH) -I$(S2BOOTSRCDIR)/arch \
 -DARCH_$(ARCH) -DARCH_UPSTREAM_$(ARCH_UPSTREAM) -DARCH_NAME=$(ARCH) -DARCH_BITS=$(BITS) -Werror
 LDFLAGS = -melf_$(ARCH) -shared
 
@@ -23,6 +24,7 @@ LDFLAGS = -melf_$(ARCH) -shared
 
 
 source := $(wildcard $(SRCDIR)/*.c $(SRCDIR)/*/*.c $(SRCDIR)/*/*/*.c)
+headers := $(wildcard $(S2BOOTSRCDIR)/*.h $(S2BOOTSRCDIR)/*/*.h $(S2BOOTSRCDIR)/*/*/*.h $(S2BOOTSRCDIR)/*/*/*/*.h $(SRCDIR)/*.h $(SRCDIR)/*/*.h $(SRCDIR)/*/*/*.h)
 objects_wdir := $(source:%.c=%.o)
 objects := $(objects_wdir:$(SRCDIR)/%=$(TMPDIR)/%)
 targets_wdir := $(source:%.c=%.ko)
@@ -52,7 +54,7 @@ else
 endif
 	$(LD) $(LDFLAGS) -o $@ $<
 
-$(TMPDIR)/%.o: $(SRCDIR)/%.c
+$(TMPDIR)/%.o: $(SRCDIR)/%.c $(headers)
 ifeq ($(WINDOWS), yes)
 	@if not exist $(subst /,\,$(dir $@)) mkdir $(subst /,\,$(dir $@))
 else

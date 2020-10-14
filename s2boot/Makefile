@@ -26,6 +26,7 @@ LDFLAGS = -T $(LINKFILE) -melf_$(ARCH) -pie
 
 
 source := $(wildcard $(SRCDIR)/*.c $(SRCDIR)/klibc/*.c $(SRCDIR)/s2lib/*.c $(SRCDIR)/arch/$(ARCH)/*.c $(SRCDIR)/arch/$(ARCH_UPSTREAM)/*.c)
+headers := $(wildcard $(SRCDIR)/*.h $(SRCDIR)/*/*.h $(SRCDIR)/*/*/*.h $(SRCDIR)/*/*/*/*.h)
 objects_wdir := $(source:%.c=%.o)
 objects := $(objects_wdir:$(SRCDIR)/%=$(TMPDIR)/%)
 
@@ -44,7 +45,7 @@ endif
 $(OUT): $(objects) $(LINKFILE)
 	$(LD) $(LDFLAGS) -o $(OUT) $(objects)
 
-$(TMPDIR)/%.o: $(SRCDIR)/%.c
+$(TMPDIR)/%.o: $(SRCDIR)/%.c $(headers)
 ifeq ($(WINDOWS), yes)
 	@if not exist $(subst /,\,$(dir $@)) mkdir $(subst /,\,$(dir $@))
 else
