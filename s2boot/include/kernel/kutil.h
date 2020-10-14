@@ -32,6 +32,7 @@ void kernel_get_current_reloc(size_t* oldAddr, size_t* newAddr);
 size_t kernel_get_reloc_ptr_count();
 status_t kernel_add_event(void (*func), size_t arg);
 void kernel_stop_autoboot();
+bool kernel_is_console_running();
 
 status_t kernel_read_file_s(char* path, size_t dest);
 status_t kernel_read_file(char* path, size_t* destWrite, size_t* sizeWrite);

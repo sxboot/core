@@ -1145,6 +1145,10 @@ void kernel_stop_autoboot(){
 	m_menu_autoboot = FALSE;
 }
 
+bool kernel_is_console_running(){
+	return m_state == KERNEL_STATE_CONSOLE;
+}
+
 
 status_t kernel_read_file_s(char* path, size_t dest){
 	printNlnr();

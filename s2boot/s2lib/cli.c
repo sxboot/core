@@ -56,7 +56,8 @@ void cli_console_key(uint16_t c){
 		console_text[console_text_length] = 0;
 		printf("\n");
 		cli_command(0, console_text);
-		cli_console_reset();
+		if(kernel_is_console_running())
+			cli_console_reset();
 	}else if(c == KEY_BACKSPACE){
 		if(console_text_length <= 0)
 			return;
