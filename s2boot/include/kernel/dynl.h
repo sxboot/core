@@ -21,14 +21,14 @@
 
 #pragma pack(push,1)
 typedef struct dynl_rel{
-	uint64_t r_offset;
-	uint64_t r_info;
+	size_t r_offset;
+	size_t r_info;
 } dynl_rel;
 
 typedef struct dynl_rela{
-	uint64_t r_offset;
-	uint64_t r_info;
-	uint64_t r_addend;
+	size_t r_offset;
+	size_t r_info;
+	size_t r_addend;
 } dynl_rela;
 #pragma pack(pop)
 

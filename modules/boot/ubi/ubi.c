@@ -321,7 +321,7 @@ status_t ubi_load_kernel_segs(){
 		elf_ph* ph = elf_get_ph(file);
 		if(ph == 0)
 			FERROR(TSX_INVALID_FORMAT);
-		status = ubi_relocate(ubi_kernel_base, ubi_kernel_top);
+		status = ubi_relocate(ubi_kernel_base + ubi_kernel_offset, ubi_kernel_top + ubi_kernel_offset);
 		CERROR();
 		file = ubi_kernel_location; // file location may have been changed by ubi_relocate
 		ph = elf_get_ph(file);
@@ -353,7 +353,7 @@ status_t ubi_load_kernel_segs(){
 		pe_section_header* sections = pe_get_sections(file);
 		if(sections == 0)
 			FERROR(TSX_INVALID_FORMAT);
-		status = ubi_relocate(ubi_kernel_base, ubi_kernel_top);
+		status = ubi_relocate(ubi_kernel_base + ubi_kernel_offset, ubi_kernel_top + ubi_kernel_offset);
 		CERROR();
 		file = mz_get_pe(ubi_kernel_location); // file location may have been changed by ubi_relocate
 		sections = pe_get_sections(file);

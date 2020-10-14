@@ -357,7 +357,7 @@ status_t ahci_device_io(uint8_t ahciNum, uint8_t portNum, uint64_t lba, uint16_t
 	
 	size_t wait_timeout = arch_time();
 	while((port->pxtfd & 0x88) && arch_time() - wait_timeout < 1000)
-		arch_sleep(10);
+		arch_sleep(1);
 	if(arch_time() - wait_timeout >= 1000){
 		FERROR(18);
 	}
@@ -375,7 +375,7 @@ status_t ahci_device_io(uint8_t ahciNum, uint8_t portNum, uint64_t lba, uint16_t
 		if(port->pxis & 0x78000000){
 			FERROR(19);
 		}
-		arch_sleep(10);
+		arch_sleep(1);
 	}
 	status = ahci_device_reset(device);
 	CERROR();
