@@ -6,9 +6,8 @@ BITS ?= 64
 
 ROOTBINDIR ?= bin
 
-CC ?= clang
-LD ?= ld.lld
-NASM ?= nasm
+cc ?= clang
+ld ?= ld.lld
 
 SRCDIR = .
 TMPDIR = ../$(ROOTBINDIR)/s2tmp
@@ -43,7 +42,7 @@ else
 endif
 
 $(OUT): $(objects) $(LINKFILE)
-	$(LD) $(LDFLAGS) -o $(OUT) $(objects)
+	$(ld) $(LDFLAGS) -o $(OUT) $(objects)
 
 $(TMPDIR)/%.o: $(SRCDIR)/%.c $(headers)
 ifeq ($(WINDOWS), yes)
@@ -51,7 +50,7 @@ ifeq ($(WINDOWS), yes)
 else
 	@mkdir -p $(dir $@)
 endif
-	$(CC) $(CCFLAGS) -c -o $@ $<
+	$(cc) $(CCFLAGS) -c -o $@ $<
 
 
 

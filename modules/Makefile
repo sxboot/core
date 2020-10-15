@@ -7,9 +7,8 @@ BITS ?= 64
 ROOTBINDIR ?= bin
 ROOTS2BOOT ?= s2boot
 
-CC ?= clang
-LD ?= ld.lld
-NASM ?= nasm
+cc ?= clang
+ld ?= ld.lld
 
 S2BOOTSRCDIR = ../$(ROOTS2BOOT)
 SRCDIR = .
@@ -52,7 +51,7 @@ ifeq ($(WINDOWS), yes)
 else
 	@mkdir -p $(dir $@)
 endif
-	$(LD) $(LDFLAGS) -o $@ $<
+	$(ld) $(LDFLAGS) -o $@ $<
 
 $(TMPDIR)/%.o: $(SRCDIR)/%.c $(headers)
 ifeq ($(WINDOWS), yes)
@@ -60,7 +59,7 @@ ifeq ($(WINDOWS), yes)
 else
 	@mkdir -p $(dir $@)
 endif
-	$(CC) $(CCFLAGS) -I$(dir $<) -c -o $@ $<
+	$(cc) $(CCFLAGS) -I$(dir $<) -c -o $@ $<
 
 
 

@@ -15,9 +15,9 @@ BINDIR ?= bin/$(ARCH)
 SRCDIR := .
 SRCMODDIR := modules
 
-CC := clang
-LD := ld.lld
-NASM := nasm
+cc ?= clang
+ld ?= ld.lld
+nasm ?= nasm
 
 
 
@@ -27,7 +27,7 @@ world: root modules
 root: bindir s0 s1 s2 s3
 
 modules: FORCE
-	$(MAKE) -C $(SRCMODDIR)/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) ROOTS2BOOT=$(SRCDIR)/s2boot CC=$(CC) LD=$(LD) NASM=$(NASM)
+	$(MAKE) -C $(SRCMODDIR)/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) ROOTS2BOOT=$(SRCDIR)/s2boot cc=$(cc) ld=$(ld) nasm=$(nasm)
 
 
 bindir:
@@ -47,10 +47,10 @@ s3: $(BINDIR)/s3boot
 
 
 s2boot: FORCE
-	$(MAKE) -C $(SRCDIR)/s2boot/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) CC=$(CC) LD=$(LD) NASM=$(NASM)
+	$(MAKE) -C $(SRCDIR)/s2boot/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) cc=$(cc) ld=$(ld) nasm=$(nasm)
 
 $(BINDIR)/s%boot: $(SRCDIR)/asm/$(ARCH)/s%boot.asm
-	$(NASM) -f bin -o $@ $<
+	$(nasm) -f bin -o $@ $<
 
 
 FORCE:
