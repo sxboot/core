@@ -202,6 +202,32 @@ void x86_loadIDT(size_t address){
 		: "r" (address)
 		: "%rdx");
 }
+
+void x86_set_segments(uint16_t codeSegment, uint16_t dataSegment){
+	asm("movzx %0, %%rax; \
+		mov %%ax, %%ds; \
+		mov %%ax, %%es; \
+		mov %%ax, %%fs; \
+		mov %%ax, %%gs; \
+		mov %%ax, %%ss;"
+		:
+		: "r" (dataSegment)
+		: "%rax");
+	// 0x5 is the size of the 3 pushs (1 byte each) and iretq (2 bytes)
+	asm("movzx %0, %%rax; \
+		lea 0x5(%%rip), %%rcx; \
+		push %%rax; \
+		push %%rcx; \
+		lretq; \
+		nop; \
+		nop; \
+		nop; \
+		nop; \
+		nop;"
+		:
+		: "r" (codeSegment)
+		: "%rax", "%rcx");
+}
 #elif defined(ARCH_i386)
 void x86_loadGDT(size_t address){
 	asm("mov %0, %%edx; \
@@ -217,6 +243,35 @@ void x86_loadIDT(size_t address){
 		:
 		: "r" (address)
 		: "%edx");
+}
+
+void x86_set_segments(uint16_t codeSegment, uint16_t dataSegment){
+	asm("movzx %0, %%eax; \
+		mov %%ax, %%ds; \
+		mov %%ax, %%es; \
+		mov %%ax, %%fs; \
+		mov %%ax, %%gs; \
+		mov %%ax, %%ss;"
+		:
+		: "r" (dataSegment)
+		: "%eax");
+	// 0x5 is the size of the 3 pushs (1 byte each) and iretq (2 bytes)
+	asm("movzx %0, %%eax; \
+		calll %=f; \
+		%=: \
+		pop %%ecx; \
+		lea 0x9(%%ecx), %%ecx; \
+		push %%eax; \
+		push %%ecx; \
+		lret; \
+		nop; \
+		nop; \
+		nop; \
+		nop; \
+		nop;"
+		:
+		: "r" (codeSegment)
+		: "%rax", "%rcx");
 }
 #else
 #error Invalid x86 architecture

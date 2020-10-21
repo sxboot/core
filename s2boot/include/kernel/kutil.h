@@ -14,7 +14,7 @@
 #define __KERNEL_KUTIL_H__
 
 #include <kernel/elf.h>
-#include <kernel/s1bootdecl.h>
+#include <shared/s1bootdecl.h>
 
 
 typedef struct kernel_error_frame{
@@ -67,5 +67,7 @@ void kernel_runtime_assertion(bool x, char* msg);
 
 size_t kernel_pseudorandom(size_t max);
 void kernel_pseudorandom_seed(size_t seed);
+
+status_t kernel_exit_uefi();
 
 #endif /* __KERNEL_KUTIL_H__ */

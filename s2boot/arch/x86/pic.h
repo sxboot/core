@@ -66,6 +66,7 @@ void pic_hw_int();
 void pic_send_eoi(uint8_t pic);
 void pic_reset();
 void pic_set_default_isrs(uint8_t irq_base, uint8_t irq_base_h);
+void pic_unmask_all();
 void pic_enable_interrupts();
 void pic_disable_interrupts();
 bool pic_is_interrupts_enabled();

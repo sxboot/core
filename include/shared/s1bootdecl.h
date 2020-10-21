@@ -17,26 +17,32 @@
 #ifndef __KERNEL_S1BOOTDECL_H__
 #define __KERNEL_S1BOOTDECL_H__
 
+#define S1BOOT_DATA_BOOT_FLAGS_GPT 0x1
+#define S1BOOT_DATA_BOOT_FLAGS_UEFI 0x2
+
+#define S1BOOT_DATA_VIDEO_MODE_GRAPHICS 0
+#define S1BOOT_DATA_VIDEO_MODE_TEXT 1
 
 #pragma pack(push,1)
 typedef struct s1boot_data{
 	uint8_t headerVersion;
-	uint8_t bootDrive;
+	uint8_t bootDrive; // bios boot drive (passed in dl)
 	uint32_t bootDriveSg;
 	uint8_t bootPartN;
-	uint8_t bootPartFS;
-	uint8_t bootGPT;
-	uint8_t bootPartCount;
-	uint16_t rBufSize;
-	uint16_t bInfoFlags;
-	uint32_t bCylinders;
-	uint32_t bHeads;
-	uint32_t bSecsPTrack;
-	uint64_t bSectors;
-	uint16_t bBytesPSec;
-	uint32_t bPEDD;
-	uint16_t memLow;
-	uint16_t memHigh;
+	uint8_t _reserved0; //bootPartFS;
+	uint8_t bootFlags; // bit 0 - boot drive gpt (unused), bit 1 - firmware is UEFI
+	// remains from bios
+	uint8_t _reserved1; //bootPartCount;
+	uint16_t _reserved2; //rBufSize;
+	uint16_t _reserved3; //bInfoFlags;
+	uint32_t _reserved4; //bCylinders;
+	uint32_t _reserved5; //bHeads;
+	uint32_t _reserved6; //bSecsPTrack;
+	uint64_t _reserved7; //bSectors;
+	uint16_t _reserved8; //bBytesPSec;
+	uint32_t _reserved9; //bPEDD;
+	uint16_t _reserved10; //memLow;
+	uint16_t _reserved11; //memHigh;
 	uint64_t mmapStart;
 	uint16_t mmapLength;
 	uint64_t s2mapStart;
@@ -58,7 +64,7 @@ typedef struct s1boot_data{
 	uint64_t memoryBase;
 	status_t (*s1serviceCallback)(size_t num, size_t arg0, size_t arg1, size_t arg2);
 #if ARCH_BITS == 32
-	uint32_t _s1serviceCallbackExt;
+	uint32_t _s1serviceCallbackExt; // padding
 #endif
 } s1boot_data;
 #pragma pack(pop)

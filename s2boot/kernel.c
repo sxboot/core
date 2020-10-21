@@ -38,7 +38,7 @@
 #include "kernel.h"
 
 
-#define VERSION_MAJOR 7
+#define VERSION_MAJOR 8
 #define VERSION_MINOR 0
 
 
@@ -82,8 +82,8 @@ static list_array* m_reloc_list = NULL;
 static size_t m_reloc_base = 0;
 
 
-static size_t m_stack_top = KERNEL_DEFAULT_STACK_LOCATION;
-static size_t m_stack_size = KERNEL_DEFAULT_STACK_SIZE;
+static size_t m_stack_top = 0;
+static size_t m_stack_size = 0;
 
 
 static list_array* m_event_queue = NULL;
@@ -115,6 +115,8 @@ status_t m_init(){
 	if(s1data->headerVersion < 49)
 		FERROR(TSX_ERROR);
 
+	log_debug("%s version %s\n", m_title, m_version_r);
+
 	m_init_state = 1;
 	status = mmgr_init(s1data->mmapStart, s1data->mmapLength);
 	CERROR();
@@ -136,10 +138,10 @@ status_t m_init(){
 	}
 	mmgr_reserve_mem_region(KERNEL_S3BOOT_LOCATION, KERNEL_S3BOOT_SIZE + KERNEL_S3BOOT_MAP_SIZE, MMGR_MEMTYPE_BOOTLOADER);
 
+	log_debug("Memory: %uKiB total, %uKiB used\n", mmgr_get_total_memory() / 1024, mmgr_get_used_blocks() * MMGR_BLOCK_SIZE / 1024);
+
 	status = m_upstream_callback(1, (size_t) (&kmalloc), 0, 0);
 	CERROR();
-
-	m_stack_top = KERNEL_DEFAULT_STACK_LOCATION;
 
 	status = m_init_reloc_stack();
 	CERROR();
@@ -846,9 +848,9 @@ status_t m_load_s3boot(){
 	s3data.magic = S3BOOT_MAGIC;
 	s3data.reserved = 0;
 	m_start_add_s3boot_map_entry(0x500, KERNEL_S3BOOT_LOCATION - 0x500, 0);
-	m_start_add_s3boot_map_entry(0x7e00, s1data->mmapStart - 0x7e00, 0);
+	/*m_start_add_s3boot_map_entry(0x7e00, s1data->mmapStart - 0x7e00, 0);
 	m_start_add_s3boot_map_entry(s1data->mmapStart + s1data->mmapLength * sizeof(mmap_entry),
-		0x7ffff - (s1data->mmapStart + s1data->mmapLength * sizeof(mmap_entry)), 0);
+		0x7ffff - (s1data->mmapStart + s1data->mmapLength * sizeof(mmap_entry)), 0);*/
 	_end:
 	return status;
 }
@@ -859,8 +861,17 @@ status_t m_s3boot(){
 	status_t status = arch_platform_reset();
 	CERROR();
 
+#ifdef ARCH_UPSTREAM_x86
+	if(s3data.bMode == S3BOOT_BMODE_REAL && s1data->bootFlags & S1BOOT_DATA_BOOT_FLAGS_UEFI){
+		log_warn("Boot configuration requested to switch to 16-bit real mode and may attempt to use BIOS interrupts, which are not available on UEFI platforms\n");
+	}
+#endif
+
+	status = kernel_exit_uefi();
+	CERROR();
+
 	// reset stack
-	size_t newStackLoc = KERNEL_DEFAULT_STACK_LOCATION;
+	size_t newStackLoc = 0x7c00; // default stack location
 	size_t cStackLoc = 0;
 	ARCH_GET_SP(cStackLoc);
 	size_t stackSize = m_stack_top - cStackLoc;
@@ -869,7 +880,7 @@ status_t m_s3boot(){
 	ARCH_SET_SP(newStackLoc);
 
 	ARCH_JUMP_SARG(KERNEL_S3BOOT_LOCATION, (uint32_t) (&s3data));
-	FERROR(TSX_ERROR);
+	HALT();
 	_end:
 	return status;
 }
@@ -1099,6 +1110,14 @@ int _start(s1boot_data* data){
 
 	stdio64_set_mode(s1data->videoMode == 1 ? STDIO64_MODE_TEXT : STDIO64_MODE_GRAPHICS, (void*) s1data->framebufferBase,
 		s1data->videoWidth, s1data->videoHeight, s1data->videoBpp, s1data->videoPitch);
+
+	size_t cStackLoc = 0;
+	ARCH_GET_SP(cStackLoc);
+	// add a few bytes for return address and other data
+	cStackLoc += ARCH_BITS / 8 * 3;
+	// assume stack top is next 0x100 memory block
+	m_stack_top = cStackLoc + (0x100 - cStackLoc % 0x100);
+	m_stack_size = 0x100;
 
 	status = m_init();
 	CERROR();
@@ -1641,6 +1660,17 @@ size_t kernel_pseudorandom(size_t max){
 
 void kernel_pseudorandom_seed(size_t seed){
 	rand_next = seed;
+}
+
+
+status_t kernel_exit_uefi(){
+	status_t status = 0;
+	if(!(s1data->bootFlags & S1BOOT_DATA_BOOT_FLAGS_UEFI))
+		goto _end;
+	status = m_upstream_callback(9, 0, 0, 0);
+	CERROR();
+	_end:
+	return status;
 }
 
 

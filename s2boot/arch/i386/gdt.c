@@ -33,6 +33,7 @@ uint8_t gdt_init(){
 		| GDT_FLAGS_GRANULARITY_4KB | GDT_FLAGS_32BIT);
 
 	x86_loadGDT((size_t) &gdt_data);
+	x86_set_segments(0x8, 0x10);
 	reloc_ptr((void**) &gdt_data.base);
 	return 0;
 }

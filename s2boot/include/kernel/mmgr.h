@@ -14,7 +14,6 @@
 #define __KERNEL_MMGR_H__
 
 #include <klibc/stdint.h>
-#include <arch/mmgr.h>
 
 
 #define MMGR_BLOCK_SIZE 4096
@@ -24,6 +23,8 @@
 #define MMGR_MEMTYPE_ACPI_RECLAIM 2
 #define MMGR_MEMTYPE_ACPI_NVS 3
 #define MMGR_MEMTYPE_BAD 4
+#define MMGR_MEMTYPE_UEFI_RUNTIME 6
+#define MMGR_MEMTYPE_UEFI_BOOT 7
 #define MMGR_MEMTYPE_BOOTLOADER 8
 #define MMGR_MEMTYPE_BOOTLOADER_DATA 9
 #define MMGR_MEMTYPE_PAGING 10
@@ -41,6 +42,10 @@ typedef struct mmap_entry{
 	size_t type;
 } mmap_entry;
 #pragma pack(pop)
+
+
+#include <arch/mmgr.h>
+
 
 status_t mmgr_init(size_t mmapStart, uint16_t mmapLength);
 void mmgr_reg_map_reloc_ptr();

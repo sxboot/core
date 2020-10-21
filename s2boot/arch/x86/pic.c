@@ -104,6 +104,11 @@ void pic_set_default_isrs(uint8_t irq_base, uint8_t irq_base_h){
 	idt_set_isr(irq_base, 0x8, IDT_FLAGS_PRESENT | IDT_FLAGS_TYPE_INT_32, &pic_irq0);
 }
 
+void pic_unmask_all(){
+	pic_send_data(0, 0);
+	pic_send_data(0, 1);
+}
+
 void pic_enable_interrupts(){
 	pic_interrupts_enabled = true;
 	asm("sti");
@@ -152,16 +157,18 @@ void pit_reset(){
 }
 
 void pit_sleep(size_t ms){
+	pic_unmask_all();
 	pit_counter = (ms * pit_frequency) / 1000;
-	while(pit_counter > 0 && pic_interrupts_enabled && !pic_interrupt_running){
+	while(pit_counter > 0){
 		pit_pause();
 	}
 }
 
 uint16_t pit_sleep_kb(size_t ms){
+	pic_unmask_all();
 	kb_clear_buf();
 	pit_counter = (ms * pit_frequency) / 1000;
-	while(pit_counter > 0 && pic_interrupts_enabled){
+	while(pit_counter > 0){
 		pit_pause();
 		if(kb_get_buf() != 0)
 			return kb_get_buf();
@@ -172,6 +179,8 @@ uint16_t pit_sleep_kb(size_t ms){
 void pit_pause(){
 	if(pic_interrupts_enabled && pit_frequency > 2 && !pic_interrupt_running)
 		asm("hlt");
+	else if(pit_counter > 0)
+		pit_counter--;
 }
 
 void pit_irq_tick(){

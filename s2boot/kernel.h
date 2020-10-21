@@ -10,10 +10,8 @@
  * The entire risk as to the quality and performance of the Covered Software is with You.
  */
 
-#include <kernel/s1bootdecl.h>
+#include <shared/s1bootdecl.h>
 
-#define KERNEL_DEFAULT_STACK_LOCATION 0x7c00
-#define KERNEL_DEFAULT_STACK_SIZE 0xc00
 #define KERNEL_STACK_SIZE 4096
 
 #define KERNEL_STATE_RUN 0

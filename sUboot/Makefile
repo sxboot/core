@@ -1,5 +1,5 @@
 
-# GNUMakefile to compile s2boot
+# GNUMakefile to compile sUboot
 
 ARCH ?= amd64
 BITS ?= 64
@@ -7,24 +7,20 @@ BITS ?= 64
 ROOTBINDIR ?= bin
 
 cc ?= clang
-ld ?= ld.lld
+ld ?= lld
 
 SRCDIR = .
-TMPDIR = ../$(ROOTBINDIR)/s2tmp
-OUT = ../$(ROOTBINDIR)/s2boot
+TMPDIR = ../$(ROOTBINDIR)/sUtmp
+OUT = ../$(ROOTBINDIR)/sUboot
 
-LINKFILE := link.ld
-
-CCFLAGS = -target $(ARCH)-pc-none-elf -fPIE -m$(BITS) -mno-sse -mno-red-zone -ffreestanding -I../include -I$(SRCDIR)/include -I$(SRCDIR)/arch/$(ARCH) \
+CCFLAGS = -target $(ARCH)-pc-win32-coff -m$(BITS) -mno-sse -mno-red-zone -ffreestanding -I../include -I$(SRCDIR)/include -I$(SRCDIR)/arch/$(ARCH) \
 -I$(SRCDIR)/arch -DARCH_$(ARCH) -DARCH_UPSTREAM_$(ARCH_UPSTREAM) -DARCH_NAME=$(ARCH) -DARCH_BITS=$(BITS) -Werror
-LDFLAGS = -T $(LINKFILE) -melf_$(ARCH) -pie
-
-# assembly file for s2boot was removed
+LDFLAGS = -flavor link /subsystem:efi_application /nodefaultlib /dll /entry:efi_main
 
 
 
 
-source := $(wildcard $(SRCDIR)/*.c $(SRCDIR)/klibc/*.c $(SRCDIR)/s2lib/*.c $(SRCDIR)/arch/$(ARCH)/*.c $(SRCDIR)/arch/$(ARCH_UPSTREAM)/*.c)
+source := $(wildcard $(SRCDIR)/*.c $(SRCDIR)/arch/$(ARCH)/*.c $(SRCDIR)/arch/$(ARCH_UPSTREAM)/*.c)
 headers := $(wildcard $(SRCDIR)/*.h $(SRCDIR)/*/*.h $(SRCDIR)/*/*/*.h $(SRCDIR)/*/*/*/*.h ../include/*.h ../include/*/*.h)
 objects_wdir := $(source:%.c=%.o)
 objects := $(objects_wdir:$(SRCDIR)/%=$(TMPDIR)/%)
@@ -42,7 +38,7 @@ else
 endif
 
 $(OUT): $(objects) $(LINKFILE)
-	$(ld) $(LDFLAGS) -o $(OUT) $(objects)
+	$(ld) $(LDFLAGS) -out:$(OUT) $(objects)
 
 $(TMPDIR)/%.o: $(SRCDIR)/%.c $(headers)
 ifeq ($(WINDOWS), yes)

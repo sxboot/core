@@ -5,7 +5,7 @@
 [![Tasks](https://api.omegazero.org/v1/kanboard/badge?projectId=1)](https://board.omegazero.org/?controller=BoardViewController&action=readonly&token=2932f13dc20a64c9b0b80ac40cbe8cb1f4d704d217bc93048daee8bc7536)
 [![Docs](https://api.omegazero.org/v1/git/docsbadge/?author=sxboot&repository=core)](https://docs.omegazero.org/docs/sxboot/)
 
-A modular boot loader supporting amd64 and i386.
+A modular boot loader supporting amd64 and i386 running on BIOS or UEFI firmware.
 
 
 ## Building

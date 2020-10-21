@@ -34,7 +34,7 @@
 					]
 				},
 				{
-					"title": "Copy early stage boot files",
+					"title": "x86 BIOS systems: Copy early stage boot files",
 					"content": [
 						"The early stage boot files will be written directly to the hard drive. You will need a hex editor or other tools to write to specific sectors ",
 						"of the hard drive.",
@@ -65,6 +65,17 @@
 								"Finally, copy $is1boot$$ to the hard drive starting at the specified sector inside the partition."
 							]
 						}
+					]
+				},
+				{
+					"title": "x86 UEFI systems: Copy EFI loader",
+					"content": [
+						"Installation on UEFI systems is relatively easy compared to BIOS systems, because no files will be written directly to the hard drive, ",
+						"therefore not requiring tools like hex editors.$n",
+						"You will only need to copy $isUboot$$ to the EFI system partition as an EFI loader. The default location of the EFI loader on the EFI ",
+						"system partition is $C/efi/boot/bootx64.efi$$ (amd64) or $C/efi/boot/bootia32.efi$$ (i386).$n",
+						"$isUboot$$ will then probe all drives to find $is2boot$$ and load it.$n",
+						"Note that you will need to disable secure boot on your computer to run $isUboot$$."
 					]
 				}
 			]

@@ -13,6 +13,7 @@
 #ifndef __ARCH_MMGR_H__
 #define __ARCH_MMGR_H__
 
+#include <kernel/mmgr.h>
 #include <klibc/stdint.h>
 
 
@@ -23,11 +24,6 @@
 #define MMGR_MEMTYPE_BIOS_BAD 5
 
 #define MMGR_USABLE_MEMORY ((size_t) 0xffffffff)
-
-// data from s1boot
-#define VMMGR_INIT_PAGE_DATA 0x60000
-#define VMMGR_INIT_PAGE_DATA_SIZE 0x4000
-#define VMMGR_INIT_MAPPED_PAGES 512
 
 #define VMMGR_PAGE_PRESENT 1
 #define VMMGR_PAGE_RW 2
@@ -53,7 +49,10 @@ typedef struct mmgr_arch_mmap_entry{
 #pragma pack(pop)
 
 
+memtype_t mmgr_x86_get_memtype(uint32_t sysmemtype);
+
 size_t vmmgr_get_address(size_t pml4t_index, size_t pdpt_index, size_t pdt_index, size_t pt_index);
+void vmmgr_init_calc_paging_stats();
 
 
 #endif /* __ARCH_MMGR_H__ */

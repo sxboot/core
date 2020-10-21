@@ -282,7 +282,7 @@ void stdio64_set_mode(uint8_t mode, void* framebuffer, size_t width, size_t heig
 		stdio64_archtex_get_texdims(&totalX, &totalY);
 	}else{
 #endif
-		videoMemLen = width * height * videoBytesPerPixel;
+		videoMemLen = height * videoBytesPerLine;
 		totalX = width / STDIO64_GRAPHICS_CHAR_WIDTH;
 		totalY = height / STDIO64_GRAPHICS_CHAR_HEIGHT;
 #if STDIO64_ARCH_HAS_TEXT

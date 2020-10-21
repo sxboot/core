@@ -120,7 +120,8 @@ bool cli_reflect_call(char* cmd, uint8_t dest, char* args){
 void cli_command(uint8_t dest, char* s){
 	if(strlen(s) < 1)
 		return;
-	for(int i = 0; i < strlen(s); i++){
+	int slen = strlen(s);
+	for(int i = 0; i < slen; i++){
 		if(s[i] == ' '){
 			s[i] = 0;
 		}
@@ -254,26 +255,29 @@ void cli_command_dbgreloc(uint8_t dest, char* args){
 
 void cli_command_dbgvid(uint8_t dest, char* args){
 	char* numstr = args;
-	size_t num = util_str_to_int(numstr);
+	size_t width = util_str_to_int(numstr);
+	size_t height = util_str_to_int(numstr + strlen(numstr) + 1);
 	status_t status = 0;
-	if(num == 1){
+	if(width == 1){
 		status = kernel_set_video(640, 480, 32, TRUE);
-	}else if(num == 3){
-		status = kernel_set_video(1024, 768, 32, TRUE);
-	}else if(num == 4){
-		status = kernel_set_video(1280, 1024, 32, TRUE);
-	}else if(num == 5){
-		status = kernel_set_video(1600, 900, 32, TRUE);
-	}else if(num == 6){
-		status = kernel_set_video(320, 200, 32, TRUE);
-	}else if(num == 7){
-		status = kernel_set_video(720, 480, 32, TRUE);
-	}else if(num == 8){
-		status = kernel_set_video(80, 25, 16, FALSE);
-	}else if(num == 9){
-		status = kernel_set_video(80, 60, 16, FALSE);
-	}else{ // 2, default
+	}else if(width == 2){
 		status = kernel_set_video(800, 600, 32, TRUE);
+	}else if(width == 3){
+		status = kernel_set_video(1024, 768, 32, TRUE);
+	}else if(width == 4){
+		status = kernel_set_video(1280, 1024, 32, TRUE);
+	}else if(width == 5){
+		status = kernel_set_video(1600, 900, 32, TRUE);
+	}else if(width == 6){
+		status = kernel_set_video(320, 200, 32, TRUE);
+	}else if(width == 7){
+		status = kernel_set_video(720, 480, 32, TRUE);
+	}else if(width == 8){
+		status = kernel_set_video(80, 25, 16, FALSE);
+	}else if(width == 9){
+		status = kernel_set_video(80, 60, 16, FALSE);
+	}else{
+		status = kernel_set_video(width, height, 32, TRUE);
 	}
 	cli_printf(dest, "status %u\n", (size_t) status);
 	kernel_print_error_trace();

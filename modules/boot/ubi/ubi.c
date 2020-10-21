@@ -22,7 +22,6 @@
 #include <kernel/kutil.h>
 #include <kernel/parse.h>
 #include <kernel/errc.h>
-#include <kernel/s1bootdecl.h>
 #include <kernel/log.h>
 #include <kernel/elf.h>
 #include <kernel/pe.h>
@@ -32,6 +31,7 @@
 #include <kernel/vfs.h>
 #include <kernel/util.h>
 #include <kernel/dynl.h>
+#include <shared/s1bootdecl.h>
 #include "ubi.h"
 
 
@@ -76,6 +76,7 @@ status_t kboot_start(parse_entry* entry){
 	lastTable = NULL;
 
 	reloc_ptr((void**) &ubi_root);
+	reloc_ptr((void**) &ubi_kernel);
 	reloc_ptr((void**) &ubi_kernel_location);
 
 	ubi_tmp_data = kmalloc(UBI_TMP_DATA_SIZE); // cannot use kmalloc in ubi services
@@ -122,7 +123,7 @@ status_t ubi_start(char* file){
 	ubi_root->specificationVersionMajor = UBI_VERSION_MAJOR;
 	ubi_root->specificationVersionMinor = UBI_VERSION_MINOR;
 	log_debug("Universal Boot Interface version %u.%u\n", UBI_VERSION_MAJOR, UBI_VERSION_MINOR);
-	ubi_root->flags |= (s1data->bootGPT & 0x2) ? UBI_FLAGS_FIRMWARE_UEFI : UBI_FLAGS_FIRMWARE_BIOS;
+	ubi_root->flags |= (s1data->bootFlags & S1BOOT_DATA_BOOT_FLAGS_UEFI) ? UBI_FLAGS_FIRMWARE_UEFI : UBI_FLAGS_FIRMWARE_BIOS;
 	ubi_root->getTable = &ubi_srv_getTable;
 	reloc_ptr((void**) &ubi_root->getTable);
 	ubi_root->uefiExit = &ubi_srv_uefiExit;
@@ -148,6 +149,12 @@ status_t ubi_start(char* file){
 
 	status = ubi_create_tables(&ubi_kernel->hdr);
 	CERROR();
+
+	if(!(ubi_kernel->flags & 0x4)){ // not keep boot services
+		status = kernel_exit_uefi();
+		CERROR();
+		ubi_root->flags |= 0x4; // set exit boot services called
+	}
 
 	status = ubi_load_kernel_segs();
 	CERROR();
@@ -480,6 +487,7 @@ status_t ubi_create_mem_table(ubi_k_mem_table* table){
 				FERROR(TSX_ERROR);
 			}
 			ubi_kernel_offset = ubi_get_random_kernel_offset((size_t) table->kernelBase, table->kaslrSize);
+			btable->flags |= 1; // KASLR bit
 		}
 	}else{
 		btable->heapLocation = 0;
@@ -840,24 +848,9 @@ status_t ubi_post_init(){
 	}
 
 
-	ubi_b_memmap_table* memmaptable = (ubi_b_memmap_table*) ubi_srv_getTable(UBI_B_MEMMAP_MAGIC);
-	size_t totallen = mmgr_gen_mmap(NULL, 0, NULL) + 1; // assume there can be another entry after we kmalloc()
-	mmap_entry* buf = kmalloc(totallen * sizeof(mmap_entry));
-	if(!buf)
-		FERROR(TSX_OUT_OF_MEMORY);
-	size_t wrlen = 0;
-	totallen = mmgr_gen_mmap(buf, totallen * sizeof(mmap_entry), &wrlen);
-	log_debug("Memory map contains %u entries\n", wrlen);
-	if(wrlen < totallen)
-		FERROR(TSX_ERROR);
-
-	// rewrite type values
-	for(size_t i = 0; i < totallen; i++){
-		buf[i].type = ubi_convert_to_ubi_memtype(buf[i].type);
-	}
-
-	memmaptable->entries = (void*) buf;
-	memmaptable->length = wrlen;
+	status = ubi_recreate_memmap();
+	CERROR();
+	log_debug("Memory map contains %u entries\n", ((ubi_b_memmap_table*) ubi_srv_getTable(UBI_B_MEMMAP_MAGIC))->length);
 
 
 	ubi_b_table_header* table = (ubi_b_table_header*) ubi_root;
@@ -867,6 +860,33 @@ status_t ubi_post_init(){
 	}
 	_end:
 	return status;
+}
+
+static size_t ubi_last_memmap_blen = 0;
+
+status_t ubi_recreate_memmap(){
+	ubi_b_memmap_table* memmaptable = (ubi_b_memmap_table*) ubi_srv_getTable(UBI_B_MEMMAP_MAGIC);
+	if(memmaptable->entries && ubi_last_memmap_blen){
+		kfree(memmaptable->entries, ubi_last_memmap_blen);
+	}
+	size_t totallen = mmgr_gen_mmap(NULL, 0, NULL) + 1; // assume there can be another entry after we kmalloc()
+	mmap_entry* buf = kmalloc(totallen * sizeof(mmap_entry));
+	if(!buf)
+		return TSX_OUT_OF_MEMORY;
+	ubi_last_memmap_blen = totallen * sizeof(mmap_entry);
+	size_t wrlen = 0;
+	totallen = mmgr_gen_mmap(buf, totallen * sizeof(mmap_entry), &wrlen);
+	if(wrlen < totallen)
+		return TSX_ERROR;
+
+	// rewrite type values
+	for(size_t i = 0; i < totallen; i++){
+		buf[i].type = ubi_convert_to_ubi_memtype(buf[i].type);
+	}
+
+	memmaptable->entries = (void*) buf;
+	memmaptable->length = wrlen;
+	return TSX_SUCCESS;
 }
 
 #if defined(ARCH_amd64)
@@ -1021,6 +1041,8 @@ uint32_t ubi_convert_to_ubi_memtype(uint32_t memtype){
 		case MMGR_MEMTYPE_ACPI_RECLAIM: return UBI_MEMTYPE_ACPI_RECLAIM;
 		case MMGR_MEMTYPE_ACPI_NVS: return UBI_MEMTYPE_ACPI_NVS;
 		case MMGR_MEMTYPE_BAD: return UBI_MEMTYPE_BAD;
+		case MMGR_MEMTYPE_UEFI_RUNTIME: return UBI_MEMTYPE_UEFI_RSRV;
+		case MMGR_MEMTYPE_UEFI_BOOT: return UBI_MEMTYPE_UEFI_BSRV;
 		case MMGR_MEMTYPE_BOOTLOADER:
 		case MMGR_MEMTYPE_BOOTLOADER_DATA: return UBI_MEMTYPE_BOOTLOADER;
 		case MMGR_MEMTYPE_PAGING: return UBI_MEMTYPE_PAGING;
@@ -1109,14 +1131,16 @@ ubi_b_table_header* UBI_API ubi_srv_getTable(uint64_t magic){
 }
 
 ubi_status_t UBI_API ubi_srv_uefiExit(){
-	return UBI_STATUS_SUCCESS;
+	return ubi_convert_to_ubi_status(kernel_exit_uefi());
 }
 
 ubi_status_t UBI_API ubi_srv_allocPages(uintn_t size, void** dest){
 	if(dest == NULL || size == 0)
 		return UBI_STATUS_INVALID;
 	ubi_alloc_virtual(dest, size);
-	return *dest == NULL ? UBI_STATUS_OUT_OF_MEMORY : UBI_STATUS_SUCCESS;
+	if(*dest == NULL)
+		return UBI_STATUS_OUT_OF_MEMORY;
+	return ubi_convert_to_ubi_status(ubi_recreate_memmap());
 }
 
 ubi_status_t UBI_API ubi_srv_readFile(const char* path, void** dest){
@@ -1131,7 +1155,10 @@ ubi_status_t UBI_API ubi_srv_readFile(const char* path, void** dest){
 	ubi_alloc_virtual(dest, fileSize);
 	if(*dest == NULL)
 		return UBI_STATUS_OUT_OF_MEMORY;
-	return ubi_convert_to_ubi_status(vfs_read_file(readpath, (size_t) *dest));
+	status = vfs_read_file(readpath, (size_t) *dest);
+	if(status != TSX_SUCCESS)
+		return ubi_convert_to_ubi_status(status);
+	return ubi_convert_to_ubi_status(ubi_recreate_memmap());
 }
 
 

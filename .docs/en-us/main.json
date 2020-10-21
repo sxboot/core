@@ -11,6 +11,7 @@
 				"$l$is0boot$$ - Master boot record code.$$",
 				"$l$isGboot$$ - Intermediate loader code between $is0boot$$ and $is1boot$$ on GPT drives.$$",
 				"$l$is1boot$$ - Loaded by $is0boot$$, sets up the environment and loads and starts $is2boot$$.$$",
+				"$l$isUboot$$ - The UEFI loader replacing s1boot and earlier stages on UEFI systems.$$",
 				"$l$is2boot$$ - The main executable. Loads and parses the configuration file, provides a selection menu, and loads the kernel.$$",
 				"$l$is3boot$$ - Does late environment setup before calling the kernel. Not used when $is2boot$$ calls the kernel directly.$$",
 				"$$$n",

@@ -38,24 +38,18 @@ extern size_t vmmgr_mappedMemory;
 static vmmgr_page_descriptor* pml4t = 0;
 
 status_t mmgr_init_arch(){
-	mmgr_used_blocks_paging = VMMGR_INIT_PAGE_DATA_SIZE / MMGR_BLOCK_SIZE;
-	vmmgr_mapped_pages = VMMGR_INIT_MAPPED_PAGES;
-	vmmgr_mappedMemory = VMMGR_INIT_MAPPED_PAGES * MMGR_BLOCK_SIZE;
+	asm("mov %%cr3, %0" : "=r" (pml4t));
 
 	mmgr_reserve_mem_region(0, mmgr_total_blocks * MMGR_BLOCK_SIZE, MMGR_MEMTYPE_RESERVED);
 	for(int i = 0; i < mmgr_memoryMapLength; i++){
-		if(mmgr_memoryMap[i].type != MMGR_MEMTYPE_BIOS_USABLE){
-			if(mmgr_memoryMap[i].type & 0xfffffff0)
-				mmgr_reserve_mem_region(mmgr_memoryMap[i].addr, mmgr_memoryMap[i].size, MMGR_MEMTYPE_RESERVED);
-			else
-				mmgr_reserve_mem_region(mmgr_memoryMap[i].addr, mmgr_memoryMap[i].size, mmgr_memoryMap[i].type - 1);
+		memtype_t memtype = mmgr_x86_get_memtype(mmgr_memoryMap[i].type);
+		if(memtype != MMGR_MEMTYPE_USABLE){
+			mmgr_reserve_mem_region(mmgr_memoryMap[i].addr, mmgr_memoryMap[i].size, memtype);
 		}else{
 			mmgr_free_mem_region(mmgr_memoryMap[i].addr, mmgr_memoryMap[i].size);
 		}
 	}
-	mmgr_reserve_mem_region(VMMGR_INIT_PAGE_DATA, VMMGR_INIT_PAGE_DATA_SIZE, MMGR_MEMTYPE_PAGING);
-
-	asm("mov %%cr3, %0" : "=r" (pml4t));
+	vmmgr_init_calc_paging_stats();
 	return TSX_SUCCESS;
 }
 
@@ -72,21 +66,20 @@ void mmgr_reserve_default_regions(){
 uint64_t mmgr_get_total_memory(){
 	size_t max = 0;
 	for(int i = 0; i < mmgr_memoryMapLength; i++){
-		if(mmgr_memoryMap[i].type == MMGR_MEMTYPE_BIOS_USABLE && mmgr_memoryMap[i].addr + mmgr_memoryMap[i].size > max){
+		if(mmgr_x86_get_memtype(mmgr_memoryMap[i].type) == MMGR_MEMTYPE_USABLE && mmgr_memoryMap[i].addr + mmgr_memoryMap[i].size > max){
 			max = mmgr_memoryMap[i].addr + mmgr_memoryMap[i].size;
 		}
 	}
 	return max;
 }
 
-status_t mmgr_create_map(){ // this function has multiple issues (see below)
+status_t mmgr_create_map(){
 	status_t status = 0;
 	uint64_t totalMem = mmgr_get_total_memory();
 	size_t mapSize = MIN(totalMem, MMGR_USABLE_MEMORY + 1) / MMGR_BLOCK_SIZE / MMGR_MMAP_BLOCKS_PER_BYTE;
 	uint8_t* newMap = NULL;
 	for(int i = 0; i < mmgr_memoryMapLength; i++){
-		if(mmgr_memoryMap[i].type == MMGR_MEMTYPE_BIOS_USABLE && mmgr_memoryMap[i].size >= mapSize && mmgr_memoryMap[i].addr >= 0x100000
-			/* memory above 1MiB is guaranteed to be free up to this point for BIOS (this may change in the future with UEFI!) */){
+		if(mmgr_x86_get_memtype(mmgr_memoryMap[i].type) == MMGR_MEMTYPE_USABLE && mmgr_memoryMap[i].size >= mapSize && mmgr_memoryMap[i].addr >= 0x100000){
 			newMap = (uint8_t*) mmgr_memoryMap[i].addr;
 			break;
 		}
@@ -106,7 +99,36 @@ void mmgr_arch_get_memmap_val(void* memmapEntry, size_t* addr, size_t* size, siz
 	mmgr_arch_mmap_entry* entry = memmapEntry;
 	*addr = entry->addr;
 	*size = entry->size;
-	*memtype = entry->type - 1; // bios memtype offset by 1 from s2boot memtype
+	*memtype = mmgr_x86_get_memtype(entry->type);
+}
+
+static memtype_t uefiMemTypes[15] = {
+	MMGR_MEMTYPE_RESERVED, // EfiReservedMemoryType
+	MMGR_MEMTYPE_BOOTLOADER, // EfiLoaderCode
+	MMGR_MEMTYPE_BOOTLOADER_DATA, // EfiLoaderData
+	MMGR_MEMTYPE_UEFI_BOOT, // EfiBootServicesCode
+	MMGR_MEMTYPE_UEFI_BOOT, // EfiBootServicesData
+	MMGR_MEMTYPE_UEFI_RUNTIME, // EfiRuntimeServicesCode
+	MMGR_MEMTYPE_UEFI_RUNTIME, // EfiRuntimeServicesData
+	MMGR_MEMTYPE_USABLE, // EfiConventionalMemory
+	MMGR_MEMTYPE_BAD, // EfiUnusableMemory
+	MMGR_MEMTYPE_ACPI_RECLAIM, // EfiACPIReclaimMemory
+	MMGR_MEMTYPE_ACPI_NVS, // EfiACPIMemoryNVS
+	MMGR_MEMTYPE_RESERVED, // EfiMemoryMappedIO
+	MMGR_MEMTYPE_RESERVED, // EfiMemoryMappedIOPortSpace
+	MMGR_MEMTYPE_RESERVED, // EfiPalCode
+	MMGR_MEMTYPE_RESERVED // EfiPersistentMemory
+};
+
+memtype_t mmgr_x86_get_memtype(uint32_t sysmemtype){
+	if(kernel_get_s1data()->bootFlags & 0x2){ // UEFI
+		if(sysmemtype < 15)
+			return uefiMemTypes[sysmemtype];
+		else
+			return MMGR_MEMTYPE_RESERVED;
+	}else{
+		return sysmemtype - 1; // bios memtype offset by 1 from s2boot memtype
+	}
 }
 
 
@@ -328,5 +350,39 @@ size_t vmmgr_get_address(size_t pml4t_index, size_t pdpt_index, size_t pdt_index
 		addr |= 0xffff000000000000;
 	}
 	return addr;
+}
+
+void vmmgr_init_calc_paging_stats(){
+	mmgr_used_blocks_paging++; // pl4t
+	mmgr_reserve_mem_region((size_t) pml4t, 0x1000, MMGR_MEMTYPE_PAGING);
+	for(int pl4t_index = 0; pl4t_index < 512; pl4t_index++){
+		if((pml4t[pl4t_index] & VMMGR_PAGE_PRESENT) && (pml4t[pl4t_index] & 0x000ffffffffff000) != 0){
+			vmmgr_page_descriptor* pdpt = (vmmgr_page_descriptor*) ((pml4t[pl4t_index] & 0x000ffffffffff000) + vmmgr_membase);
+			mmgr_used_blocks_paging++;
+			mmgr_reserve_mem_region((size_t) pdpt, 0x1000, MMGR_MEMTYPE_PAGING);
+			for(int pdpt_index = 0; pdpt_index < 512; pdpt_index++){
+				if((pdpt[pdpt_index] & VMMGR_PAGE_PRESENT) && (pdpt[pdpt_index] & 0x000ffffffffff000) != 0){
+					vmmgr_page_descriptor* pdt = (vmmgr_page_descriptor*) ((pdpt[pdpt_index] & 0x000ffffffffff000) + vmmgr_membase);
+					mmgr_used_blocks_paging++;
+					mmgr_reserve_mem_region((size_t) pdt, 0x1000, MMGR_MEMTYPE_PAGING);
+					for(int pdt_index = 0; pdt_index < 512; pdt_index++){
+						if((pdt[pdt_index] & VMMGR_PAGE_PRESENT) && (pdt[pdt_index] & 0x000ffffffffff000) != 0){
+							vmmgr_page_descriptor* pt = (vmmgr_page_descriptor*) ((pdt[pdt_index] & 0x000ffffffffff000) + vmmgr_membase);
+							mmgr_used_blocks_paging++;
+							mmgr_reserve_mem_region((size_t) pt, 0x1000, MMGR_MEMTYPE_PAGING);
+							for(int pt_index = 0; pt_index < 512; pt_index++){
+								if(pt[pt_index] & VMMGR_PAGE_PRESENT){
+									vmmgr_mapped_pages++;
+									size_t address = vmmgr_get_address(pl4t_index, pdpt_index, pdt_index, pt_index);
+									if(address > vmmgr_mappedMemory)
+										vmmgr_mappedMemory = address + 0x1000;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 

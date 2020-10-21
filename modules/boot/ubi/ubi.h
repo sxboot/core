@@ -287,6 +287,7 @@ status_t ubi_create_cmd_table();
 status_t ubi_create_bdrive_table();
 
 status_t ubi_post_init();
+status_t ubi_recreate_memmap();
 ubi_status_t ubi_call_kernel();
 
 void* ubi_get_file_addr(size_t vaddr);

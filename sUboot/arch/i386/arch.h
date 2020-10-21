@@ -10,22 +10,12 @@
  * The entire risk as to the quality and performance of the Covered Software is with You.
  */
 
-#ifndef __ARCH_X86_H__
-#define __ARCH_X86_H__
+#ifndef __SUBOOT_ARCH__
+#define __SUBOOT_ARCH__
 
+#define HALT() __halt:asm("cli");asm("hlt");goto __halt;
 
-#define X86_HW_INT_BASE 32
+#define S2PREENTRY() asm("xor %ebp, %ebp")
 
+#endif /* __SUBOOT_ARCH__ */
 
-
-uint8_t x86_inb(uint16_t port);
-uint32_t x86_ind(uint16_t port);
-void x86_outb(uint16_t port, uint8_t data);
-void x86_outd(uint16_t port, uint32_t data);
-
-void x86_loadGDT(size_t address);
-void x86_loadIDT(size_t address);
-void x86_set_segments(uint16_t codeSegment, uint16_t dataSegment);
-
-
-#endif /* __ARCH_X86_H__ */
