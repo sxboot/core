@@ -10,21 +10,12 @@ steps:
   image: drone/git
   commands:
   - mkdir bintmp
-  - git submodule update --recursive --remote
 
 - name: core
   image: clang-nasm-gmake
   pull: never
   commands:
   - make root ARCH=amd64 BINDIR=bintmp
-  depends_on:
-  - init
-
-- name: modules
-  image: clang-nasm-gmake
-  pull: never
-  commands:
-  - make modules ARCH=amd64 BINDIR=bintmp
   depends_on:
   - init
 
@@ -41,21 +32,12 @@ steps:
   image: drone/git
   commands:
   - mkdir bintmp
-  - git submodule update --recursive --remote
 
 - name: core
   image: clang-nasm-gmake
   pull: never
   commands:
   - make root ARCH=i386 BINDIR=bintmp
-  depends_on:
-  - init
-
-- name: modules
-  image: clang-nasm-gmake
-  pull: never
-  commands:
-  - make modules ARCH=i386 BINDIR=bintmp
   depends_on:
   - init
 
