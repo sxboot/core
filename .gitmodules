@@ -1,0 +1,4 @@
+[submodule "libmodules"]
+	path = modules
+	url = https://git.omegazero.org/sxboot/modules.git
+	branch = master

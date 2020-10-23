@@ -27,7 +27,7 @@ world: root modules
 root: bindir s0 s1 sU s2 s3
 
 modules: FORCE
-	$(MAKE) -C $(SRCMODDIR)/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) ROOTBINDIR=$(BINDIR) ROOTS2BOOT=$(SRCDIR)/s2boot cc=$(cc) ld=$(ld) nasm=$(nasm)
+	$(MAKE) -C $(SRCMODDIR)/ all ARCH=$(ARCH) ARCH_UPSTREAM=$(ARCH_UPSTREAM) BITS=$(BITS) BINDIR=$(BINDIR) ROOTS2BOOT=$(SRCDIR)/s2boot ROOTDIR=.. cc=$(cc) ld=$(ld) nasm=$(nasm)
 
 
 bindir:

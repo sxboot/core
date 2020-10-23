@@ -7,10 +7,10 @@ platform:
 
 steps:
 - name: init
-  image: clang-nasm-gmake
-  pull: never
+  image: drone/git
   commands:
   - mkdir bintmp
+  - git submodule update --recursive --remote
 
 - name: core
   image: clang-nasm-gmake
@@ -38,10 +38,10 @@ platform:
 
 steps:
 - name: init
-  image: clang-nasm-gmake
-  pull: never
+  image: drone/git
   commands:
   - mkdir bintmp
+  - git submodule update --recursive --remote
 
 - name: core
   image: clang-nasm-gmake
