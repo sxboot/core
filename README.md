@@ -15,7 +15,7 @@ To build from source, you will need gmake, LLVM and nasm installed. It is recomm
 
 Download source:
 ```bash
-git clone https://git.omegazero.org/sxboot/core.git
+git clone --recurse-submodules https://git.omegazero.org/sxboot/core.git
 cd core
 ```
 Compile everything:
