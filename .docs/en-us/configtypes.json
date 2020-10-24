@@ -1,0 +1,101 @@
+{
+	"title": "Boot Types",
+	"content": [
+		"It is recommended you have read $bConfiguration File$$ before reading this.$n$n",
+		"The boot type for a menu entry specifies how the operating system should be loaded.$n",
+		"$is2boot$$ supports a few built-in boot types; others will be available through modules loaded at runtime.",
+		{
+			"title": "Native Boot Types",
+			"content": [
+				"These boot types are directly built into the $is2boot$$ executable due to their low complexity.",
+				{
+					"title": "chain",
+					"content": [
+						"Chainloads a VBR of the partition and drive given by the $ipartition$$ and $idrive$$ arguments.",
+						{
+							"title": "Parameters",
+							"content": [
+								"$L",
+								"$l$ipartition$$ - Specifies which partition to use. Must be below 256.$$",
+								"$l$idrive$$ (optional) - Specifies which drive to use. Drive identifiers are made up of two parts: ",
+								"an up to four letter drive type name (eg $Cahci$$), followed by a 0-based drive number. Example: $Cahci0$$. Defaults to the boot drive.$$",
+								"$$"
+							]
+						}
+					]
+				},
+				{
+					"title": "binary",
+					"content": [
+						"Loads a file given by $ifile$$ at $idestination$$. The boot loader will jump to $idestination + offset$$ in either 16, ",
+						"32, or 64 bit mode (set by argument $ibits$$).",
+						{
+							"title": "Parameters",
+							"content": [
+								"$L",
+								"$l$ifile$$ - Absolute path to the file to be loaded. ",
+									"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$.$$",
+								"$l$idestination$$ - Specifies where to load the file. Must be in hexadecimal format ($C0x$ihhh...$$$$).$$",
+								"$l$ioffset$$ - Specifies an entry point offset. Must be in hexadecimal format.$$",
+								"$l$ibits$$ - Specifies in which mode to start the file. Must be 16, 32 or 64.$$",
+								"$$"
+							]
+						}
+					]
+				},
+				{
+					"title": "mbr",
+					"content": [
+						"Similar to $ibinary$$, except that $idestination$$ and $ibits$$ are preset to $C0x7c00$$ (on x86) and $C16$$, respectively.",
+						{
+							"title": "Parameters",
+							"content": [
+								"$L",
+								"$l$ifile$$ - Absolute path to the MBR file. Must be 512 bytes in size. ",
+									"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$.$$",
+								"$$"
+							]
+						}
+					]
+				},
+				{
+					"title": "image",
+					"content": [
+						"Loads an ELF file given by $ifile$$, sets it up according to the ELF program header and jumps to the entry point.",
+						"Must be a 32-bit executable.",
+						{
+							"title": "Parameters",
+							"content": [
+								"$L",
+								"$l$ifile$$ - Absolute path to the ELF file. ",
+									"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$.$$",
+								"$$"
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "External Boot Types",
+			"content": [
+				"These boot types are available through modules loaded during runtime. They are available in the $isxboot/modules$$ repository, along with other modules.",
+				{
+					"title": "ubi",
+					"content": [
+						"The $iUniversal Boot Interface$$. The specification is not available yet.",
+						{
+							"title": "Parameters",
+							"content": [
+								"$L",
+								"$l$ifile$$ - Absolute path to the kernel file. ",
+									"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$.$$",
+								"$$"
+							]
+						}
+					]
+				}
+			]
+		}
+	]
+}

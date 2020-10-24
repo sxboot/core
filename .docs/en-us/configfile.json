@@ -51,53 +51,8 @@
 					"content": [
 						"A string identifier of the boot procedure to use. May be anything available in the boot modules directory ($C/lib/boot/$$ by default).$n",
 						"For example, if $itype$$ is 'ubi', $is2boot$$ will attempt to load $C/lib/boot/ubi.ko$$ and start the module or show an error if the file ",
-						"does not exist.$n$is2boot$$ natively supports these boot types:$L",
-						"$l$Cchain$$ - Chainloads a VBR of the partition and drive given by the $ipartition$$ and $idrive$$ arguments.$$",
-						"$l$Cbinary$$ - Loads a file given by $ifile$$ at $idestination$$. The boot loader will jump to $idestination + offset$$ in either 16, ",
-						"32, or 64 bit mode (set by argument $ibits$$).$$",
-						"$l$Cmbr$$ - Similar to $ibinary$$, except that $idestination$$ and $ibits$$ are preset to $C0x7c00$$ and $C16$$, respectively.$$",
-						"$l$Cimage$$ - Loads an ELF file given by $ifile$$, sets it up according to the ELF program header and jumps to the entry point.",
-						"Must be a 32-bit executable.$$",
-						"$$",
+						"does not exist.$nAvailable boot types are listed in $bBoot Types$$.$n",
 						"This argument is required for every menu entry."
-					]
-				},
-				{
-					"title": "drive",
-					"content": [
-						"Specifies which drive to use. The exact meaning of this argument depends on the boot type. Drive identifiers are made up of two parts: ",
-						"an up to four letter drive type name (eg $Cahci$$), followed by a 0-based drive number. Example: $Cahci0$$ (first drive connected using AHCI).$n$n",
-						"$bDefault: $$(none/boot drive)"
-					]
-				},
-				{
-					"title": "partition",
-					"content": [
-						"Specifies which partition to use. The exact meaning of this argument depends on the boot type. Must be below 256."
-					]
-				},
-				{
-					"title": "destination",
-					"content": [
-						"Specifies where to load a file. The exact meaning of this argument depends on the boot type. Can be in decimal or hexadecimal format."
-					]
-				},
-				{
-					"title": "offset",
-					"content": [
-						"Specifies an entry point offset. The exact meaning of this argument depends on the boot type. Can be in decimal or hexadecimal format."
-					]
-				},
-				{
-					"title": "bits",
-					"content": [
-						"Specifies in which mode to start the kernel file. The exact meaning of this argument depends on the boot type. Must be 16, 32 or 64."
-					]
-				},
-				{
-					"title": "file",
-					"content": [
-						"Absolute path to the kernel file to be loaded. Usually required, depending on the boot type.$nSee $iFile path format$$ below."
 					]
 				}
 			]

@@ -28,6 +28,11 @@
 		},
 		{
 			"type": "page",
+			"name": "configtypes",
+			"title": "Boot Types"
+		},
+		{
+			"type": "page",
 			"name": "cmdline",
 			"title": "Command Line"
 		},
