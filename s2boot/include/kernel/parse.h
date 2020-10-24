@@ -23,6 +23,7 @@
 typedef struct parse_entry{
 	char* name;
 	char* conf_start;
+	bool parsed;
 	boot_type_t type;
 	list_array* optionsKeys;
 	list_array* optionsValues;

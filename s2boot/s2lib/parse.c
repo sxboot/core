@@ -66,6 +66,7 @@ status_t parse_file(char* file){
 				cEntry = entries;
 				entries++;
 				parse_entries[cEntry].conf_start = file + i;
+				parse_entries[cEntry].parsed = false;
 				reloc_ptr((void**) &(parse_entries[cEntry].name));
 				reloc_ptr((void**) &(parse_entries[cEntry].conf_start));
 				reloc_ptr((void**) &(parse_entries[cEntry].optionsKeys));
@@ -148,18 +149,31 @@ status_t parse_file(char* file){
 status_t parse_file_entry(uint8_t index){
 	status_t status = 0;
 	parse_entry* entry = &parse_entries[index];
+	if(entry->parsed)
+		goto _parsed;
 	char* addr = entry->conf_start;
 	updateLoadingWheel();
 	if(!util_str_startsWith(addr, "entry"))
 		FERROR(TSX_PARSE_ERROR);
 	addr += util_str_length_c_max(addr, '{', 64) + 1;
 
+	if(entry->optionsKeys)
+		list_array_delete(entry->optionsKeys);
+	if(entry->optionsValues)
+		list_array_delete(entry->optionsValues);
+
 	entry->optionsKeys = list_array_create(0);
 	entry->optionsValues = list_array_create(0);
 	if(!entry->optionsKeys || !entry->optionsValues)
 		FERROR(TSX_OUT_OF_MEMORY);
 
-	for(int i = 0;; i++){
+	size_t end = util_str_length_c_max(addr, '}', 4096);
+	if(end == 4096){
+		log_error("%s Entry '%s': no terminating '}'\n", parse_pref, entry->name);
+		FERROR(TSX_PARSE_ERROR);
+	}
+
+	for(int i = 0; i < end - (size_t) addr; i++){
 		updateLoadingWheel();
 		char c = *(addr + i);
 		if(c <= 0x20)
@@ -189,6 +203,8 @@ status_t parse_file_entry(uint8_t index){
 			i += util_str_length(addr + i);
 		}
 	}
+	entry->parsed = true;
+	_parsed:
 
 	if(entry->type == 0){
 		printNlnr();
