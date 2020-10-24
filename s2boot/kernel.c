@@ -657,12 +657,14 @@ void m_reset_state(){
 // STATE = 1
 
 void m_print_title(char* s){
-	for(int i = 0; i < 80; i++)
+	size_t cols, rows;
+	stdio64_get_text_size(&rows, &cols);
+	for(int i = 0; i < cols; i++)
 		printCharAt(0x20, 0x70, i, 0);
 	printAt(m_title, 0x70, 0, 0);
 	printAt(" - ", 0x70, strlen(m_title), 0);
 	printAt(s, 0x70, strlen(m_title) + 3, 0);
-	printAt(m_version, 0x70, 80 - strlen(m_version), 0);
+	printAt(m_version, 0x70, cols - strlen(m_version), 0);
 }
 
 void m_show_menu(){
@@ -687,27 +689,29 @@ void m_close_menu(){
 void m_menu_paint(){
 	if(m_state != KERNEL_STATE_MENU)
 		return;
+	size_t cols, rows;
+	stdio64_get_text_size(&rows, &cols);
 	parse_data_t* parse_data = parse_get_data();
 	for(int i = 0; i < PARSE_MAX_ENTRIES; i++){
-		for(int j = 1; j < 79; j++)
+		for(int j = 1; j < cols - 1; j++)
 			printCharAt(0x20, (m_menu_selected == i) ? 0x70 : 0x7, j, 2 + i);
 		if(parse_data->entries[i].name != 0){
 			printAt(parse_data->entries[i].name, (m_menu_selected == i) ? 0x70 : 0x7, 1, 2 + i);
 		}
 	}
-	printAt("Use arrow keys \x18\x19 to select", 0xf, 0, 19);
-	printAt("Press ENTER to boot selected entry", 0xf, 0, 20);
-	printAt("Press C to enter CLI", 0xf, 0, 21);
-	for(int i = 0; i < 80; i++)
-		printCharAt(0x20, 0x7, i, 23);
+	printAt("Use arrow keys \x18\x19 to select", 0xf, 0, rows - 6);
+	printAt("Press ENTER to boot selected entry", 0xf, 0, rows - 5);
+	printAt("Press C to enter CLI", 0xf, 0, rows - 4);
+	for(int i = 0; i < cols; i++)
+		printCharAt(0x20, 0x7, i, rows - 2);
 	if(m_menu_autoboot){
-		printAt("Autoboot in ", 0x7, 0, 23);
+		printAt("Autoboot in ", 0x7, 0, rows - 2);
 		char* numstr = getDec(m_menu_counter);
-		printAt(numstr, 0x7, 12, 23);
+		printAt(numstr, 0x7, 12, rows - 2);
 		if(m_menu_counter == 1)
-			printAt(" second", 0x7, 12 + strlen(numstr), 23);
+			printAt(" second", 0x7, 12 + strlen(numstr), rows - 2);
 		else
-			printAt(" seconds", 0x7, 12 + strlen(numstr), 23);
+			printAt(" seconds", 0x7, 12 + strlen(numstr), rows - 2);
 	}
 }
 

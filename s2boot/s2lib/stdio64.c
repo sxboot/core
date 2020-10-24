@@ -307,6 +307,13 @@ void stdio64_get_mode(uint8_t* mode, size_t* width, size_t* height, size_t* bpp,
 		*framebuffer = videoMem;
 }
 
+void stdio64_get_text_size(size_t* rows, size_t* cols){
+	if(rows)
+		*rows = totalY;
+	if(cols)
+		*cols = totalX;
+}
+
 void stdio64_get_cursor_pos(size_t* x, size_t* y){
 	if(x)
 		*x = cursorX;
