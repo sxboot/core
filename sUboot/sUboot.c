@@ -112,6 +112,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE* _systemTab
 	s1data.bootFlags = 0x2 | (bootGPT ? 1 : 0);
 	s1data.memoryBase = 0;
 	s1data.s1serviceCallback = (status_t (*)(size_t, size_t, size_t, size_t)) &suboot_callback;
+	s1data.uefiSystemTable = (uint64_t) &systemTable;
 
 	bs->Stall(200000);
 	suboot_println("Calling s2boot");

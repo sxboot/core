@@ -66,6 +66,7 @@ typedef struct s1boot_data{
 #if ARCH_BITS == 32
 	uint32_t _s1serviceCallbackExt; // padding
 #endif
+	uint64_t uefiSystemTable;
 } s1boot_data;
 #pragma pack(pop)
 

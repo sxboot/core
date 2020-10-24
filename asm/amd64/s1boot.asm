@@ -90,6 +90,8 @@ membase		dq	0
 
 s1bootServiceCallback	dq	serviceCallback
 
+uefiReserved	dq	0
+
 times 16 db 0
 align 8, db 0xff
 
