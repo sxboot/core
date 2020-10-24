@@ -211,7 +211,7 @@ loadGPT:
 	call	printP
 	mov		edx, DWORD[bx + 0x20]
 	mov		cx, 1
-	mov		bx, S1BOOT_LOCATION
+	mov		bx, SGBOOT_LOCATION
 	call	readSectors16
 	call	printNln
 	mov		BYTE[msgSuccessG - 1], 0x20
@@ -219,7 +219,7 @@ loadGPT:
 	call	println
 	mov		cl, BYTE[bootDrive]
 	mov		bl, 0x54
-	jmp		S1BOOT_LOCATION
+	jmp		SGBOOT_LOCATION
 
 times 440 - ($-$$) db 0
 
