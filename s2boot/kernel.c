@@ -630,9 +630,11 @@ status_t m_select(){
 				break;
 			m_menu_paint();
 			m_poll_events();
-		}else{
+		}else if(m_state == KERNEL_STATE_CONSOLE){
 			arch_sleep(10);
 			m_poll_events();
+		}else{
+			break;
 		}
 	}
 	serial_on_input(NULL);
@@ -734,13 +736,12 @@ void cli_command_menu(uint8_t dest, char* args){
 
 void cli_command_boot(uint8_t dest, char* args){
 	uint8_t num = util_str_to_int(args);
-	if(num >= PARSE_MAX_ENTRIES){
+	if(num >= parse_get_data()->entryCount){
 		cli_printf(dest, "&cInvalid number: %s\n", args);
 		return;
 	}
+	m_reset_state();
 	m_menu_selected = num;
-	m_menu_counter = 0;
-	m_menu_autoboot = TRUE;
 }
 
 

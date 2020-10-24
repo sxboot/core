@@ -30,6 +30,7 @@ typedef struct parse_entry{
 
 typedef struct parse_data{
 	parse_entry* entries;
+	size_t entryCount;
 	uint64_t timeout;
 	uint32_t serialBaud;
 	char* hdDriverOverride;

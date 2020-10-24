@@ -136,6 +136,7 @@ status_t parse_file(char* file){
 			}
 		}
 	}
+	parse_data.entryCount = entries;
 	_end:
 	return status;
 	unexpectedEnd:
