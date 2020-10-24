@@ -257,6 +257,8 @@ status_t m_init(){
 	status = m_load_config();
 	CERROR();
 
+	stdio64_set_font_scale(parse_get_data()->fontScale);
+
 	status = m_load_additional_drivers();
 	CERROR();
 

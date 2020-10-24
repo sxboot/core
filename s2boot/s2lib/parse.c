@@ -35,6 +35,7 @@ status_t parse_file(char* file){
 	parse_data.entries = parse_entries;
 	parse_data.timeout = 10; // default value
 	parse_data.serialBaud = 9600;
+	parse_data.fontScale = 10;
 	reloc_ptr((void**) &parse_data.entries);
 	memset(parse_entries, 0, sizeof(parse_entries));
 
@@ -93,9 +94,9 @@ status_t parse_file(char* file){
 				if(num == SIZE_MAX){
 					printNlnr();
 					log_error("%s Invalid number: %s\n", parse_pref, file + i);
-					FERROR(TSX_PARSE_ERROR);
+				}else{
+					parse_data.timeout = num;
 				}
-				parse_data.timeout = num;
 				i += util_str_length(file + i);
 			}else if(util_str_startsWith(file + i, "serialBaud")){
 				i += util_str_length_c_max(file + i, '=', 64) + 1;
@@ -105,9 +106,35 @@ status_t parse_file(char* file){
 				if(num == SIZE_MAX){
 					printNlnr();
 					log_error("%s Invalid number: %s\n", parse_pref, file + i);
-					FERROR(TSX_PARSE_ERROR);
+				}else{
+					parse_data.serialBaud = num;
 				}
-				parse_data.serialBaud = num;
+				i += util_str_length(file + i);
+			}else if(util_str_startsWith(file + i, "fontScale")){
+				i += util_str_length_c_max(file + i, '=', 64) + 1;
+				while(*(file + i) == ' ')
+					i++;
+				size_t len = strlen(file + i);
+				char* subStr = NULL;
+				for(size_t j = 0; j < len; j++){
+					if(*(file + i + j) == '.'){
+						*(file + i + j) = 0;
+						subStr = file + i + j + 1;
+						break;
+					}
+				}
+				size_t scale10 = util_str_to_int(file + i);
+				size_t scale1 = 0;
+				if(subStr){
+					scale1 = util_str_to_int(subStr);
+					*(subStr - 1) = '.';
+				}
+				parse_data.fontScale = scale10 * 10 + scale1;
+				if(parse_data.fontScale < 5 || parse_data.fontScale > 30){
+					printNlnr();
+					log_error("%s Invalid font scale: %s\n", parse_pref, file + i);
+					parse_data.fontScale = 10;
+				}
 				i += util_str_length(file + i);
 			}else if(util_str_startsWith(file + i, "hdDrivers")){
 				i += util_str_length_c_max(file + i, '=', 64) + 1;

@@ -297,6 +297,14 @@ void cli_command_dbgtime(uint8_t dest, char* args){
 	cli_printf(dest, "%u\n", (size_t) arch_real_time());
 }
 
+void cli_command_dbgscale(uint8_t dest, char* args){
+	size_t scale = util_str_to_int(args);
+	stdio64_set_font_scale(scale);
+	size_t rows, cols;
+	stdio64_get_text_size(&rows, &cols);
+	cli_printf(dest, "%ux%u cells\n", cols, rows);
+}
+
 #ifdef ARCH_UPSTREAM_x86
 void cli_command_e820map(uint8_t dest, char* args){
 	mmgr_arch_mmap_entry* addr = 0;

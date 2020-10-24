@@ -38,6 +38,14 @@
 						"(See $a[https://en.wikipedia.org/wiki/Serial_port#Settings]Wikipedia$$).$n$n",
 						"$bDefault: $$9600"
 					]
+				},
+				{
+					"title": "fontScale",
+					"content": [
+						"Font scale in graphics mode.$n",
+						"Must be a value between $i0.5$$ and $i3$$. There must be at most a single digit after the dot.$n$n",
+						"$bDefault: $$1.0"
+					]
 				}
 			]
 		},

@@ -36,6 +36,8 @@ static char* hexTmp = "0x00000000";
 static uint16_t* textLog = 0;
 static size_t textLogIndex = 0;
 
+static size_t fontScale = 10;
+
 size_t cursorX = 0;
 size_t cursorY = 0;
 size_t totalX = 0;
@@ -283,8 +285,8 @@ void stdio64_set_mode(uint8_t mode, void* framebuffer, size_t width, size_t heig
 	}else{
 #endif
 		videoMemLen = height * videoBytesPerLine;
-		totalX = width / STDIO64_GRAPHICS_CHAR_WIDTH;
-		totalY = height / STDIO64_GRAPHICS_CHAR_HEIGHT;
+		totalX = width / STDIO64_GRAPHICS_CHAR_WIDTH * 10 / fontScale;
+		totalY = height / STDIO64_GRAPHICS_CHAR_HEIGHT * 10 / fontScale;
 #if STDIO64_ARCH_HAS_TEXT
 	}
 #endif
@@ -319,6 +321,14 @@ void stdio64_get_cursor_pos(size_t* x, size_t* y){
 		*x = cursorX;
 	if(y)
 		*y = cursorY;
+}
+
+void stdio64_set_font_scale(size_t scale){
+	fontScale = scale;
+	if(videoMode == STDIO64_MODE_GRAPHICS){
+		totalX = videoWidth / STDIO64_GRAPHICS_CHAR_WIDTH * 10 / fontScale;
+		totalY = videoHeight / STDIO64_GRAPHICS_CHAR_HEIGHT * 10 / fontScale;
+	}
 }
 
 bool stdio64_available(){
@@ -425,7 +435,7 @@ void printNln_nlog(){
 	cursorX = 0;
 	cursorY++;
 	if(cursorY >= totalY){
-		cursorY--;
+		cursorY = totalY - 1;
 		shiftUp();
 	}
 	updateCursor();
@@ -592,13 +602,15 @@ void stdio64_def_delChar(){
 
 void stdio64_def_printCharAt(char ch, uint8_t attr, size_t x, size_t y){
 	uint64_t cfont = ch >= 0 ? font7x8[ch] : font7x8[128];
-	uint8_t* addr = videoMem + y * videoBytesPerLine * STDIO64_GRAPHICS_CHAR_HEIGHT + x * videoBytesPerPixel * STDIO64_GRAPHICS_CHAR_WIDTH;
-	for(int y = 0; y < 8; y++){
-		for(int x = 0; x < STDIO64_GRAPHICS_CHAR_WIDTH; x++){
-			stdio64_def_writeVGAPixel(addr, attr, cfont & (1ULL << (x * 8 + y)));
+	size_t absWidth = STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10;
+	size_t absHeight = STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10;
+	uint8_t* addr = videoMem + y * videoBytesPerLine * absHeight + x * videoBytesPerPixel * absWidth;
+	for(int y = 0; y < 8 * fontScale / 10; y++){
+		for(int x = 0; x < absWidth; x++){
+			stdio64_def_writeVGAPixel(addr, attr, cfont & (1ULL << ((x * 10 / fontScale) * 8 + (y * 10 / fontScale))));
 			addr += videoBytesPerPixel;
 		}
-		addr += videoBytesPerLine - videoBytesPerPixel * STDIO64_GRAPHICS_CHAR_WIDTH;
+		addr += videoBytesPerLine - videoBytesPerPixel * absWidth;
 	}
 }
 
@@ -623,11 +635,13 @@ void stdio64_def_writeVGAPixel(uint8_t* addr, uint8_t attr, bool set){
 
 void stdio64_def_shiftUp(){
 	uint8_t* addr = videoMem;
-	for(int i = 0; i < videoHeight * videoBytesPerLine - videoBytesPerLine * STDIO64_GRAPHICS_CHAR_HEIGHT; i++){
-		*addr = *(addr + videoBytesPerLine * STDIO64_GRAPHICS_CHAR_HEIGHT);
+	size_t absHeight = STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10;
+	size_t blank = videoBytesPerLine * absHeight;
+	for(int i = 0; i < videoHeight * videoBytesPerLine - blank; i++){
+		*addr = *(addr + blank);
 		addr++;
 	}
-	for(int i = 0; i < videoBytesPerLine * STDIO64_GRAPHICS_CHAR_HEIGHT; i++){
+	for(int i = 0; i < blank; i++){
 		*addr = 0;
 		addr++;
 	}
@@ -635,11 +649,13 @@ void stdio64_def_shiftUp(){
 
 void stdio64_def_shiftDown(){
 	uint8_t* addr = videoMem + videoHeight * videoBytesPerLine - 1;
-	for(int i = 0; i < videoHeight * videoBytesPerLine - videoBytesPerLine * STDIO64_GRAPHICS_CHAR_HEIGHT; i++){
-		*addr = *(addr - videoBytesPerLine * STDIO64_GRAPHICS_CHAR_HEIGHT);
+	size_t absHeight = STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10;
+	size_t blank = videoBytesPerLine * absHeight;
+	for(int i = 0; i < videoHeight * videoBytesPerLine - blank; i++){
+		*addr = *(addr - blank);
 		addr--;
 	}
-	for(int i = 0; i < videoBytesPerLine * STDIO64_GRAPHICS_CHAR_HEIGHT; i++){
+	for(int i = 0; i < blank; i++){
 		*addr = 0;
 		addr--;
 	}

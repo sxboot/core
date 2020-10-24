@@ -36,6 +36,7 @@ void stdio64_set_mode(uint8_t mode, void* framebuffer, size_t width, size_t heig
 void stdio64_get_mode(uint8_t* mode, size_t* width, size_t* height, size_t* bpp, size_t* pitch, void** framebuffer);
 void stdio64_get_text_size(size_t* rows, size_t* cols);
 void stdio64_get_cursor_pos(size_t* x, size_t* y);
+void stdio64_set_font_scale(size_t scale);
 bool stdio64_available();
 
 void print(char* string, uint8_t attr);
