@@ -13,16 +13,10 @@
 #ifndef __KERNEL_PARSE_H__
 #define __KERNEL_PARSE_H__
 
+#include <kernel/list.h>
+
 
 #define PARSE_MAX_ENTRIES 16
-
-/*
-#define PARSE_ENTRY_TYPE_CHAIN 1
-#define PARSE_ENTRY_TYPE_MBR 2
-#define PARSE_ENTRY_TYPE_BINARY 3
-#define PARSE_ENTRY_TYPE_IMAGE 4
-#define PARSE_ENTRY_TYPE_UEFI 5
-*/
 
 #define boot_type_t char*
 
@@ -30,12 +24,8 @@ typedef struct parse_entry{
 	char* name;
 	char* conf_start;
 	boot_type_t type;
-	char* drive;
-	uint8_t partition;
-	char* file;
-	uint64_t destination;
-	uint64_t offset;
-	uint8_t bits;
+	list_array* optionsKeys;
+	list_array* optionsValues;
 } parse_entry;
 
 typedef struct parse_data{
@@ -48,6 +38,7 @@ typedef struct parse_data{
 
 status_t parse_file(char* file);
 status_t parse_file_entry(uint8_t index);
+char* parse_get_option(parse_entry* entry, char* key);
 parse_data_t* parse_get_data();
 
 

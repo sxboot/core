@@ -94,9 +94,9 @@ size_t util_str_to_int(char* s){
 
 size_t util_str_to_hex_c(char* s, char term){
 	size_t ret = 0;
-	size_t strl = util_str_length_c(s, term) - 2;
-	for(int i = 0; i < strl; i++){
-		uint8_t num = s[i + 2];
+	size_t strl = util_str_length_c(s, term);
+	for(int i = 2; i < strl; i++){
+		uint8_t num = s[i];
 		if(num == term)break;
 		if((num > 47) && (num < 58)){
 			ret += ((size_t) num - 48) << ((strl - i - 1) * 4);

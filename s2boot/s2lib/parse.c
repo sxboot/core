@@ -22,6 +22,7 @@
 #include <kernel/parse.h>
 #include <kernel/stdio64.h>
 #include <kernel/log.h>
+#include <kernel/list.h>
 
 static parse_entry parse_entries[PARSE_MAX_ENTRIES];
 static parse_data_t parse_data;
@@ -67,8 +68,8 @@ status_t parse_file(char* file){
 				parse_entries[cEntry].conf_start = file + i;
 				reloc_ptr((void**) &(parse_entries[cEntry].name));
 				reloc_ptr((void**) &(parse_entries[cEntry].conf_start));
-				reloc_ptr((void**) &(parse_entries[cEntry].drive));
-				reloc_ptr((void**) &(parse_entries[cEntry].file));
+				reloc_ptr((void**) &(parse_entries[cEntry].optionsKeys));
+				reloc_ptr((void**) &(parse_entries[cEntry].optionsValues));
 				while(*(file + i) != '"' && *(file + i) != 0)
 					i++;
 				if(*(file + i) == 0){
@@ -152,6 +153,11 @@ status_t parse_file_entry(uint8_t index){
 		FERROR(TSX_PARSE_ERROR);
 	addr += util_str_length_c_max(addr, '{', 64) + 1;
 
+	entry->optionsKeys = list_array_create(0);
+	entry->optionsValues = list_array_create(0);
+	if(!entry->optionsKeys || !entry->optionsValues)
+		FERROR(TSX_OUT_OF_MEMORY);
+
 	for(int i = 0;; i++){
 		updateLoadingWheel();
 		char c = *(addr + i);
@@ -169,76 +175,17 @@ status_t parse_file_entry(uint8_t index){
 				i++;
 			entry->type = addr + i;
 			i += util_str_length(addr + i);
-		}else if(util_str_startsWith(addr + i, "drive")){
-			i += util_str_length_c_max(addr + i, '=', 64) + 1;
-			while(*(addr + i) == ' ')
-				i++;
-			entry->drive = addr + i;
-			i += util_str_length(addr + i);
-		}else if(util_str_startsWith(addr + i, "partition")){
-			i += util_str_length_c_max(addr + i, '=', 64) + 1;
-			while(*(addr + i) == ' ')
-				i++;
-			uint64_t num = util_str_to_int(addr + i);
-			if(num > 0xff){
-				printNlnr();
-				log_error("%s Invalid partition number: %s (must be below 256)\n", parse_pref, addr + i);
-				FERROR(TSX_PARSE_ERROR);
-			}
-			entry->partition = num;
-			i += util_str_length(addr + i);
-		}else if(util_str_startsWith(addr + i, "file")){
-			i += util_str_length_c_max(addr + i, '=', 64) + 1;
-			while(*(addr + i) == ' ')
-				i++;
-			entry->file = addr + i;
-			i += util_str_length(addr + i);
-		}else if(util_str_startsWith(addr + i, "destination")){
-			i += util_str_length_c_max(addr + i, '=', 64) + 1;
-			while(*(addr + i) == ' ')
-				i++;
-			uint64_t num = util_str_to_hex(addr + i);
-			if(num >= SIZE_MAX){
-				printNlnr();
-				log_error("%s Invalid destination address\n", parse_pref, addr + i);
-				FERROR(TSX_PARSE_ERROR);
-			}
-			entry->destination = num;
-			i += util_str_length(addr + i);
-		}else if(util_str_startsWith(addr + i, "offset")){
-			i += util_str_length_c_max(addr + i, '=', 64) + 1;
-			while(*(addr + i) == ' ')
-				i++;
-			uint64_t num = util_str_to_hex(addr + i);
-			if(num >= SIZE_MAX){
-				printNlnr();
-				log_error("%s Invalid offset address\n", parse_pref, addr + i);
-				FERROR(TSX_PARSE_ERROR);
-			}
-			entry->offset = num;
-			i += util_str_length(addr + i);
-		}else if(util_str_startsWith(addr + i, "bits")){
-			i += util_str_length_c_max(addr + i, '=', 64) + 1;
-			while(*(addr + i) == ' ')
-				i++;
-			uint64_t num = util_str_to_int(addr + i);
-			if(num >= SIZE_MAX){
-				printNlnr();
-				log_error("%s Invalid bits number\n", parse_pref, addr + i);
-				FERROR(TSX_PARSE_ERROR);
-			}
-			if(num == 16 || num == 32 || num == 64){
-				entry->bits = num;
-			}else{
-				printNlnr();
-				log_error("%s Bits must be 16, 32 or 64\n", parse_pref, addr + i);
-				FERROR(TSX_PARSE_ERROR);
-			}
-			i += util_str_length(addr + i);
 		}else{
-			printNlnr();
-			log_error("%s Unexpected token: %s\n", parse_pref, addr + i);
-			FERROR(TSX_PARSE_ERROR);
+			char* key = addr + i;
+			i += util_str_length_c_max(addr + i, '=', 64) + 1;
+			*(addr + i - 1) = 0;
+			for(size_t j = i - 2; j > 0 && *(addr + j) == ' '; j--)
+				*(addr + j) = 0;
+			while(*(addr + i) == ' ')
+				i++;
+			list_array_push(entry->optionsKeys, key);
+			list_array_push(entry->optionsValues, addr + i);
+			i += util_str_length(addr + i);
 		}
 	}
 
@@ -249,6 +196,15 @@ status_t parse_file_entry(uint8_t index){
 	}
 	_end:
 	return status;
+}
+
+char* parse_get_option(parse_entry* entry, char* key){
+	for(size_t i = 0; i < entry->optionsKeys->length; i++){
+		if(util_str_equals(entry->optionsKeys->base[i], key)){
+			return entry->optionsValues->base[i];
+		}
+	}
+	return NULL;
 }
 
 parse_data_t* parse_get_data(){

@@ -890,19 +890,24 @@ status_t m_boot_chain(parse_entry* entry){
 	CERROR();
 	char driveLabel[8];
 	memset((void*) driveLabel, 0, 8);
-	if(entry->drive == 0){
+	char* pdrive = parse_get_option(entry, "drive");
+	char* ppartition = parse_get_option(entry, "partition");
+	if(!ppartition)
+		FERROR(TSX_MISSING_ARGUMENTS);
+	size_t ppartitionNum = util_str_to_int(ppartition);
+	if(pdrive == 0){
 		snprintf(driveLabel, 8, "%s%u", bootDriveType, bootDriveNum);
 	}else{
-		if(strlen(entry->drive) > 7){
+		if(strlen(pdrive) > 7){
 			log_fatal("Drive label for selected entry too large", 0xc);
 			FERROR(TSX_ERROR);
 		}
-		snprintf(driveLabel, 8, "%s", entry->drive);
+		snprintf(driveLabel, 8, "%s", pdrive);
 	}
 	uint64_t partStart;
-	status = vfs_get_partition_lba(driveLabel, entry->partition, &partStart);
+	status = vfs_get_partition_lba(driveLabel, ppartitionNum, &partStart);
 	CERROR();
-	log_debug("Partition %u on drive %s starting at 0x%X\n", entry->partition, driveLabel, partStart);
+	log_debug("Partition %u on drive %s starting at 0x%X\n", ppartitionNum, driveLabel, partStart);
 	status = msio_read_drive(driveLabel, partStart, 1, 0x7c00);
 	CERROR();
 	s3data.bMode = S3BOOT_BMODE_REAL;
@@ -916,14 +921,15 @@ status_t m_boot_chain(parse_entry* entry){
 
 status_t m_boot_mbr(parse_entry* entry){
 	status_t status = 0;
-	if(!(entry->file != NULL)){
+	char* pfile = parse_get_option(entry, "file");
+	if(!(pfile != NULL)){
 		FERROR(TSX_MISSING_ARGUMENTS);
 	}
 	status = m_load_s3boot();
 	CERROR();
-	if(strlen(entry->file) > 500)
+	if(strlen(pfile) > 500)
 		FERROR(TSX_TOO_LARGE);
-	char* filePath = kernel_write_boot_file(entry->file);
+	char* filePath = kernel_write_boot_file(pfile);
 	if(filePath == 0)
 		FERROR(TSX_OUT_OF_MEMORY);
 	log_debug("Loading image file %s\n", filePath);
@@ -947,21 +953,34 @@ status_t m_boot_mbr(parse_entry* entry){
 
 status_t m_boot_binary(parse_entry* entry){
 	status_t status = 0;
-	if(!(entry->file != NULL && entry->destination != 0 && entry->bits != 0)){
+	char* pfile = parse_get_option(entry, "file");
+	char* pdestination = parse_get_option(entry, "destination");
+	char* poffset = parse_get_option(entry, "offset");
+	char* pbits = parse_get_option(entry, "bits");
+	if(!(pfile != NULL && pdestination != 0 && pbits != 0)){
 		FERROR(TSX_MISSING_ARGUMENTS);
+	}
+	size_t pdestinationNum = util_str_to_hex(pdestination);
+	size_t poffsetNum = 0;
+	if(poffset)
+		poffsetNum = util_str_to_hex(poffset);
+	size_t pbitsNum = util_str_to_int(pbits);
+	if(!(pbitsNum == 16 || pbitsNum == 32 || pbitsNum == 64)){
+		log_error("Bits must be 16, 32 or 64\n");
+		FERROR(TSX_INVALID_TYPE);
 	}
 	status = m_load_s3boot();
 	CERROR();
-	if(strlen(entry->file) > 500)
+	if(strlen(pfile) > 500)
 		FERROR(TSX_TOO_LARGE);
-	char* filePath = kernel_write_boot_file(entry->file);
+	char* filePath = kernel_write_boot_file(pfile);
 	if(filePath == 0)
 		FERROR(TSX_OUT_OF_MEMORY);
 	log_debug("Loading image file %s\n", filePath);
 	size_t size = 0;
 	status = vfs_get_file_size(filePath, &size);
 	CERROR();
-	mmgr_reserve_mem_region(entry->destination, size, MMGR_MEMTYPE_OS);
+	mmgr_reserve_mem_region(pdestinationNum, size, MMGR_MEMTYPE_OS);
 	size_t tempLocation = (size_t) vmmgr_alloc_block_sequential(size);
 	if(tempLocation == 0){
 		FERROR(TSX_OUT_OF_MEMORY);
@@ -969,10 +988,10 @@ status_t m_boot_binary(parse_entry* entry){
 	status = kernel_read_file_s(filePath, tempLocation);
 	CERROR();
 	kfree(filePath, MMGR_BLOCK_SIZE);
-	s3data.bMode = entry->bits == 16 ? S3BOOT_BMODE_REAL : (entry->bits == 32 ? S3BOOT_BMODE_PROTECTED : S3BOOT_BMODE_LONG);
-	s3data.jmp = entry->destination + entry->offset;
+	s3data.bMode = pbitsNum == 16 ? S3BOOT_BMODE_REAL : (pbitsNum == 32 ? S3BOOT_BMODE_PROTECTED : S3BOOT_BMODE_LONG);
+	s3data.jmp = pdestinationNum + poffsetNum;
 	m_start_reserve_s3boot_map_mem_region(vmmgr_get_physical(tempLocation), size);
-	m_start_add_s3boot_map_entry(entry->destination, size, vmmgr_get_physical(tempLocation));
+	m_start_add_s3boot_map_entry(pdestinationNum, size, vmmgr_get_physical(tempLocation));
 	status = m_s3boot();
 	CERROR();
 	_end:
@@ -981,14 +1000,15 @@ status_t m_boot_binary(parse_entry* entry){
 
 status_t m_boot_image(parse_entry* entry){
 	status_t status = 0;
-	if(!(entry->file != NULL)){
+	char* pfile = parse_get_option(entry, "file");
+	if(!(pfile != NULL)){
 		FERROR(TSX_MISSING_ARGUMENTS);
 	}
 	status = m_load_s3boot();
 	CERROR();
-	if(strlen(entry->file) > 500)
+	if(strlen(pfile) > 500)
 		FERROR(TSX_TOO_LARGE);
-	char* filePath = kernel_write_boot_file(entry->file);
+	char* filePath = kernel_write_boot_file(pfile);
 	if(filePath == 0)
 		FERROR(TSX_OUT_OF_MEMORY);
 	size_t size = 0;
