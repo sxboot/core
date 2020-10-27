@@ -25,6 +25,8 @@ char* strchr(char* s, int c);
 char* strstr(char* str, char* sstr);
 char* strcpy(char* dest, const char* src);
 char* strncpy(char* dest, const char* src, size_t n);
+int strcmp(char* str1, char* str2);
+int strncmp(char* str1, char* str2, size_t num);
 
 int atoi(const char* str);
 long int atol(const char* str);

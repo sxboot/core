@@ -102,6 +102,32 @@ char* strncpy(char* dest, const char* src, size_t n){
 	return memcpy(dest, src, size);
 }
 
+int strcmp(char* str1, char* str2){
+	size_t c = 0;
+	do{
+		if(str1[c] != str2[c])
+			return str1[c] - str2[c];
+		if(!str1[c])
+			break;
+		c++;
+	}while(1);
+	return 0;
+}
+
+int strncmp(char* str1, char* str2, size_t num){
+	if(num == 0)
+		return 0;
+	size_t c = 0;
+	do{
+		if(str1[c] != str2[c])
+			return str1[c] - str2[c];
+		if(!str1[c])
+			break;
+		c++;
+	}while(--num);
+	return 0;
+}
+
 
 int atoi(const char* str){
 	return (int) util_str_to_int((char*) str);
