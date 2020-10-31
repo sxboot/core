@@ -18,15 +18,7 @@
 #define KERNEL_STATE_MENU 1
 #define KERNEL_STATE_CONSOLE 2
 
-#define KERNEL_S3BOOT_LOCATION 0x5000
-#define KERNEL_S3BOOT_SIZE 0x1000
-#define KERNEL_S3BOOT_MAP_SIZE 0x800
-
 #define S3BOOT_MAGIC 0x297f09ae
-
-#define S3BOOT_BMODE_REAL 1
-#define S3BOOT_BMODE_PROTECTED 2
-#define S3BOOT_BMODE_LONG 3
 
 #pragma pack(push,1)
 typedef struct s2map_entry{
@@ -66,8 +58,9 @@ typedef struct s3boot_data{
 	uint32_t s3mapLength;
 	uint16_t bMode;
 	uint64_t jmp;
-	uint32_t reserved;
-	uint16_t data1;
+	uint32_t archFlags;
+	uint16_t reserved2;
+	uint64_t entryStateStruct;
 } s3boot_data;
 
 typedef struct s3boot_map_entry{

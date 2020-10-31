@@ -32,11 +32,29 @@ typedef unsigned long long	size_t;
 
 #define HALT() __halt:asm("cli");asm("hlt");goto __halt;
 
+#define ARCH_DEFAULT_STACK_LOCATION 0x7c00
+#define ARCH_DEFAULT_MBR_LOCATION 0x7c00
+
 
 typedef struct arch_stack_frame{
 	struct arch_stack_frame* next;
 	size_t ip;
 } arch_stack_frame;
+
+typedef struct arch_os_entry_state{
+	size_t a;
+	size_t b;
+	size_t c;
+	size_t d;
+	size_t sp;
+	size_t bp;
+	size_t si;
+	size_t di;
+	size_t gdt_alt_base;
+	size_t gdt_alt_size;
+	uint16_t cs;
+	uint16_t ds;
+} arch_os_entry_state;
 
 
 #endif /* __ARCH_H__ */

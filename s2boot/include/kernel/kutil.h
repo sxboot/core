@@ -17,6 +17,15 @@
 #include <shared/s1bootdecl.h>
 
 
+#define KERNEL_S3BOOT_LOCATION 0x5000
+#define KERNEL_S3BOOT_SIZE 0x1000
+#define KERNEL_S3BOOT_MAP_SIZE 0x800
+#define KERNEL_S3BOOT_DATA_BUF KERNEL_S3BOOT_LOCATION + KERNEL_S3BOOT_SIZE + KERNEL_S3BOOT_MAP_SIZE
+
+#define KERNEL_S3BOOT_BMODE_16 1
+#define KERNEL_S3BOOT_BMODE_32 2
+#define KERNEL_S3BOOT_BMODE_64 3
+
 typedef struct kernel_error_frame{
 	size_t fp;
 	size_t ip;
@@ -69,5 +78,9 @@ size_t kernel_pseudorandom(size_t max);
 void kernel_pseudorandom_seed(size_t seed);
 
 status_t kernel_exit_uefi();
+
+void kernel_s3boot_add_mem_region(uint32_t base, uint32_t length, uint32_t source);
+void kernel_s3boot_reserve_mem_region(uint32_t base, uint32_t length);
+void kernel_jump(arch_os_entry_state* entryState, size_t dest, size_t mode, uint32_t archFlags);
 
 #endif /* __KERNEL_KUTIL_H__ */

@@ -99,6 +99,7 @@ static size_t cRelocNewAddr = 0;
 static size_t rand_next = 1602621212;
 
 
+static bool s3boot_loaded = FALSE;
 static s3boot_data s3data;
 
 
@@ -833,11 +834,10 @@ status_t m_load_external_boot_handler(char* type){
 	return status;
 }
 
-
-// internal boot handlers (using s3boot)
-
 status_t m_load_s3boot(){
 	status_t status = 0;
+	if(s3boot_loaded)
+		goto _end;
 	s3bootFilePath = kmalloc(MMGR_BLOCK_SIZE);
 	if(s3bootFilePath == NULL)
 		FERROR(TSX_OUT_OF_MEMORY);
@@ -853,7 +853,7 @@ status_t m_load_s3boot(){
 	status = kernel_read_file_s(s3bootFilePath, KERNEL_S3BOOT_LOCATION);
 	CERROR();
 	s3data.magic = S3BOOT_MAGIC;
-	s3data.reserved = 0;
+	s3boot_loaded = TRUE;
 	m_start_add_s3boot_map_entry(0x500, KERNEL_S3BOOT_LOCATION - 0x500, 0);
 	/*m_start_add_s3boot_map_entry(0x7e00, s1data->mmapStart - 0x7e00, 0);
 	m_start_add_s3boot_map_entry(s1data->mmapStart + s1data->mmapLength * sizeof(mmap_entry),
@@ -863,22 +863,25 @@ status_t m_load_s3boot(){
 }
 
 status_t m_s3boot(){
-	if(s3data.magic != S3BOOT_MAGIC || s3data.bMode == 0 || s3data.jmp == 0)
-		return 1;
-	status_t status = arch_platform_reset();
-	CERROR();
+	if(s3data.magic != S3BOOT_MAGIC || s3data.bMode == 0)
+		return TSX_ERROR;
 
 #ifdef ARCH_UPSTREAM_x86
-	if(s3data.bMode == S3BOOT_BMODE_REAL && s1data->bootFlags & S1BOOT_DATA_BOOT_FLAGS_UEFI){
+	if(s3data.bMode == KERNEL_S3BOOT_BMODE_16 && s1data->bootFlags & S1BOOT_DATA_BOOT_FLAGS_UEFI){
 		log_warn("Boot configuration requested to switch to 16-bit real mode and may attempt to use BIOS interrupts, which are not available on UEFI platforms\n");
 	}
+	if(!(s1data->bootFlags & S1BOOT_DATA_BOOT_FLAGS_UEFI))
+		kernel_set_video(80, 25, 16, FALSE);
 #endif
+
+	status_t status = arch_platform_reset();
+	CERROR();
 
 	status = kernel_exit_uefi();
 	CERROR();
 
 	// reset stack
-	size_t newStackLoc = 0x7c00; // default stack location
+	size_t newStackLoc = ARCH_DEFAULT_STACK_LOCATION;
 	size_t cStackLoc = 0;
 	ARCH_GET_SP(cStackLoc);
 	size_t stackSize = m_stack_top - cStackLoc;
@@ -891,6 +894,29 @@ status_t m_s3boot(){
 	_end:
 	return status;
 }
+
+void m_start_add_s3boot_map_entry(uint32_t base, uint32_t length, uint32_t source){
+	s3data.s3mapStart = KERNEL_S3BOOT_LOCATION + KERNEL_S3BOOT_SIZE;
+	s3boot_map_entry* map_entries = (s3boot_map_entry*) (KERNEL_S3BOOT_LOCATION + KERNEL_S3BOOT_SIZE);
+	map_entries[s3data.s3mapLength].base = base;
+	map_entries[s3data.s3mapLength].length = length;
+	map_entries[s3data.s3mapLength].source = source;
+	s3data.s3mapLength++;
+}
+
+void m_start_reserve_s3boot_map_mem_region(uint32_t base, uint32_t length){
+	s3boot_map_entry* map_entries = (s3boot_map_entry*) (KERNEL_S3BOOT_LOCATION + KERNEL_S3BOOT_SIZE);
+	for(int i = 0; i < s3data.s3mapLength; i++){
+		if(map_entries[i].base <= base && map_entries[i].base + map_entries[i].length >= base + length){
+			m_start_add_s3boot_map_entry(base + length, map_entries[i].length - length - (base - map_entries[i].base), 0);
+			map_entries[i].length = base - map_entries[i].base;
+			break;
+		}
+	}
+}
+
+
+// internal boot handlers (using s3boot)
 
 status_t m_boot_chain(parse_entry* entry){
 	status_t status = m_load_s3boot();
@@ -915,13 +941,14 @@ status_t m_boot_chain(parse_entry* entry){
 	status = vfs_get_partition_lba(driveLabel, ppartitionNum, &partStart);
 	CERROR();
 	log_debug("Partition %u on drive %s starting at 0x%X\n", ppartitionNum, driveLabel, partStart);
-	status = msio_read_drive(driveLabel, partStart, 1, 0x7c00);
+	status = msio_read_drive(driveLabel, partStart, 1, ARCH_DEFAULT_MBR_LOCATION);
 	CERROR();
-	s3data.bMode = S3BOOT_BMODE_REAL;
-	s3data.jmp = 0x7c00;
-	s3data.data1 = s1data->bootDrive;
-	status = m_s3boot();
-	CERROR();
+	arch_os_entry_state entryState;
+	memset(&entryState, 0, sizeof(arch_os_entry_state));
+#ifdef ARCH_UPSTREAM_x86
+	entryState.d = s1data->bootDrive;
+#endif
+	kernel_jump(&entryState, ARCH_DEFAULT_MBR_LOCATION, KERNEL_S3BOOT_BMODE_16, 0);
 	_end:
 	return status;
 }
@@ -946,14 +973,15 @@ status_t m_boot_mbr(parse_entry* entry){
 	if(fileSize > 512){
 		FERROR(TSX_TOO_LARGE);
 	}
-	status = kernel_read_file_s(filePath, 0x7c00);
+	status = kernel_read_file_s(filePath, ARCH_DEFAULT_MBR_LOCATION);
 	CERROR();
 	kfree(filePath, MMGR_BLOCK_SIZE);
-	s3data.bMode = S3BOOT_BMODE_REAL;
-	s3data.jmp = 0x7c00;
-	s3data.data1 = s1data->bootDrive;
-	status = m_s3boot();
-	CERROR();
+	arch_os_entry_state entryState;
+	memset(&entryState, 0, sizeof(arch_os_entry_state));
+#ifdef ARCH_UPSTREAM_x86
+	entryState.d = s1data->bootDrive;
+#endif
+	kernel_jump(&entryState, ARCH_DEFAULT_MBR_LOCATION, KERNEL_S3BOOT_BMODE_16, 0);
 	_end:
 	return status;
 }
@@ -995,8 +1023,9 @@ status_t m_boot_binary(parse_entry* entry){
 	status = kernel_read_file_s(filePath, tempLocation);
 	CERROR();
 	kfree(filePath, MMGR_BLOCK_SIZE);
-	s3data.bMode = pbitsNum == 16 ? S3BOOT_BMODE_REAL : (pbitsNum == 32 ? S3BOOT_BMODE_PROTECTED : S3BOOT_BMODE_LONG);
+	s3data.bMode = pbitsNum == 16 ? KERNEL_S3BOOT_BMODE_16 : (pbitsNum == 32 ? KERNEL_S3BOOT_BMODE_32 : KERNEL_S3BOOT_BMODE_64);
 	s3data.jmp = pdestinationNum + poffsetNum;
+	s3data.entryStateStruct = 0;
 	m_start_reserve_s3boot_map_mem_region(vmmgr_get_physical(tempLocation), size);
 	m_start_add_s3boot_map_entry(pdestinationNum, size, vmmgr_get_physical(tempLocation));
 	status = m_s3boot();
@@ -1026,9 +1055,9 @@ status_t m_boot_image(parse_entry* entry){
 	if(elf32_is_elf((elf32_file*) tempLocation)){
 		elf32_file* file = (elf32_file*) tempLocation;
 		if(file->ei_class == ELF_CLASS_32BIT){
-			s3data.bMode = S3BOOT_BMODE_PROTECTED;
+			s3data.bMode = KERNEL_S3BOOT_BMODE_32;
 		}/*else if(file->ei_class == ELF_CLASS_64BIT){ // 64bit is not supported
-			s3data.bMode = S3BOOT_BMODE_LONG;
+			s3data.bMode = KERNEL_S3BOOT_BMODE_64;
 		}*/else{
 			log_error("Unsupported/unknown ELF class %u\n", file->ei_class);
 			FERROR(TSX_INVALID_FORMAT);
@@ -1051,30 +1080,11 @@ status_t m_boot_image(parse_entry* entry){
 	}else{
 		FERROR(TSX_INVALID_FORMAT);
 	}
+	s3data.entryStateStruct = 0;
 	status = m_s3boot();
 	CERROR();
 	_end:
 	return status;
-}
-
-void m_start_add_s3boot_map_entry(uint32_t base, uint32_t length, uint32_t source){
-	s3data.s3mapStart = KERNEL_S3BOOT_LOCATION + KERNEL_S3BOOT_SIZE;
-	s3boot_map_entry* map_entries = (s3boot_map_entry*) (KERNEL_S3BOOT_LOCATION + KERNEL_S3BOOT_SIZE);
-	map_entries[s3data.s3mapLength].base = base;
-	map_entries[s3data.s3mapLength].length = length;
-	map_entries[s3data.s3mapLength].source = source;
-	s3data.s3mapLength++;
-}
-
-void m_start_reserve_s3boot_map_mem_region(uint32_t base, uint32_t length){
-	s3boot_map_entry* map_entries = (s3boot_map_entry*) (KERNEL_S3BOOT_LOCATION + KERNEL_S3BOOT_SIZE);
-	for(int i = 0; i < s3data.s3mapLength; i++){
-		if(map_entries[i].base <= base && map_entries[i].base + map_entries[i].length >= base + length){
-			m_start_add_s3boot_map_entry(base + length, map_entries[i].length - length - (base - map_entries[i].base), 0);
-			map_entries[i].length = base - map_entries[i].base;
-			break;
-		}
-	}
 }
 
 
@@ -1698,6 +1708,30 @@ status_t kernel_exit_uefi(){
 	CERROR();
 	_end:
 	return status;
+}
+
+
+void kernel_s3boot_add_mem_region(uint32_t base, uint32_t length, uint32_t source){
+	m_start_add_s3boot_map_entry(base, length, source);
+}
+
+void kernel_s3boot_reserve_mem_region(uint32_t base, uint32_t length){
+	m_start_reserve_s3boot_map_mem_region(base, length);
+}
+
+void kernel_jump(arch_os_entry_state* entryState, size_t dest, size_t mode, uint32_t archFlags){
+	s3data.jmp = dest;
+	s3data.entryStateStruct = (uint64_t) entryState;
+	s3data.bMode = mode;
+	s3data.archFlags = archFlags;
+	if(!entryState->sp){
+		entryState->sp = ARCH_DEFAULT_STACK_LOCATION;
+	}
+	status_t status = m_load_s3boot();
+	if(status == TSX_SUCCESS)
+		status = m_s3boot();
+	log_fatal("s3boot call failed: %u (%s)\n", status, errcode_get_name(status));
+	HALT();
 }
 
 

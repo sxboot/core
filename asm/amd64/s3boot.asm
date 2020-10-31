@@ -28,7 +28,20 @@ s3dataLoc	dq	0
 s3BMode		dw	0
 s3jmpDest	dq	0
 s3vaddrOff	dd	0
-s3data1		dw	0
+s3archFlags	dd	0
+; entry state
+s3entry_a	dq	0
+s3entry_b	dq	0
+s3entry_c	dq	0
+s3entry_d	dq	0
+s3entry_sp	dq	0
+s3entry_bp	dq	0
+s3entry_si	dq	0
+s3entry_di	dq	0
+s3entry_gdtb	dq	0
+s3entry_gdtl	dq	0
+s3entry_cs	dw	0
+s3entry_ds	dw	0
 
 cu_x	db	0
 cu_y	db	0
@@ -312,8 +325,27 @@ main32:
 	mov		DWORD[s3jmpDest], edx
 	mov		edx, DWORD[esi + 18]
 	mov		DWORD[s3jmpDest + 4], edx
-	mov		dx, WORD[esi + 26]
-	mov		WORD[s3data1], dx
+	mov		edx, DWORD[esi + 22]
+	mov		DWORD[s3archFlags], edx
+
+	mov		esi, DWORD[esi + 28] ; entry state
+	cmp		esi, 0
+	je		.no_entry_state
+	mov		edi, s3entry_a
+	mov		ecx, 84
+	cld
+	rep		movsb
+	.no_entry_state:
+
+	cmp		DWORD[s3entry_sp], 0
+	jne		.entry_sp_set
+	mov		DWORD[s3entry_sp], 0x7c00
+	.entry_sp_set:
+	cmp		DWORD[s3entry_bp], 0
+	jne		.entry_bp_set
+	mov		edx, DWORD[s3entry_sp]
+	mov		DWORD[s3entry_bp], edx
+	.entry_bp_set:
 
 	mov		esi, DWORD[s3dataLoc]
 	mov		ebx, DWORD[esi + 4]
@@ -514,6 +546,8 @@ realMode:
 ; ------------------- REAL MODE CONT -------------------
 bits 16
 
+realModeInt	db	1
+
 cont16: ; 16 bit protected mode
 	cli
 
@@ -541,34 +575,90 @@ cont16b: ; real real mode
 
 	lidt	[idt16]
 
-	mov		eax, 0
-	mov		ebx, 0
-	mov		ecx, 0
-	mov		edx, 0
-	mov		dl, BYTE[s3data1]
-	mov		esi, 0
-	mov		edi, 0
-	mov		bp, 0x7c00
+	mov		edx, DWORD[s3archFlags]
+	and		edx, 1
+	cmp		edx, 0
+	je		.intOn
+	mov		BYTE[realModeInt], 0
+	.intOn:
 
+	mov		dx, WORD[jmpDest16]
+	mov		WORD[.b16_jmp_far + 1], dx
+	mov		dx, WORD[s3entry_cs]
+	mov		WORD[.b16_jmp_far + 3], dx
+
+	mov		edx, DWORD[s3entry_a]
+	mov		DWORD[.b16_set_ax + 2], edx
+
+	mov		ebx, DWORD[s3entry_b]
+	mov		ecx, DWORD[s3entry_c]
+	mov		edx, DWORD[s3entry_d]
+	mov		esi, DWORD[s3entry_si]
+	mov		edi, DWORD[s3entry_di]
+	mov		esp, DWORD[s3entry_bp]
+	mov		ebp, DWORD[s3entry_sp]
+
+	cmp		BYTE[realModeInt], 1
+	jne		.noInt
 	sti
+	.noInt:
 
-	jmp		WORD[jmpDest16]
+	mov		ax, WORD[s3entry_ds]
+	mov		ds, ax
+	mov		es, ax
+	mov		fs, ax
+	mov		gs, ax
+	mov		ss, ax
+
+	.b16_set_ax:
+	mov		eax, 0
+
+	.b16_jmp_far:
+	jmp		0:0
 
 
 ; ------------------- PROT MODE -------------------
 bits 32
 
+gdt32_alt:
+	dw	0
+	dq	0
+
 protMode:
 	call	s3end
 
-	mov		eax, 0
-	mov		ebx, 0
-	mov		ecx, 0
-	mov		edx, 0
-	mov		esi, 0
-	mov		edi, 0
-	mov		esp, 0x7c00
-	mov		ebp, 0x7c00
+	cmp		DWORD[s3entry_gdtb], 0
+	je		.no_alt_gdt
+	cmp		DWORD[s3entry_gdtl], 0
+	je		.no_alt_gdt
+	mov		edx, DWORD[s3entry_gdtb]
+	mov		DWORD[gdt32_alt + 2], edx
+	mov		dx, WORD[s3entry_gdtl]
+	mov		WORD[gdt32_alt], dx
+	lgdt	[gdt32_alt]
+
+	push	dword WORD[s3entry_cs]
+	push	.alt_gdt_set_cs
+	retf
+	.alt_gdt_set_cs:
+
+	mov		ax, WORD[s3entry_ds]
+	mov		ds, ax
+	mov		es, ax
+	mov		fs, ax
+	mov		gs, ax
+	mov		ss, ax
+
+	.no_alt_gdt:
+
+	mov		eax, DWORD[s3entry_a]
+	mov		ebx, DWORD[s3entry_b]
+	mov		ecx, DWORD[s3entry_c]
+	mov		edx, DWORD[s3entry_d]
+	mov		esi, DWORD[s3entry_si]
+	mov		edi, DWORD[s3entry_di]
+	mov		esp, DWORD[s3entry_bp]
+	mov		ebp, DWORD[s3entry_sp]
 
 	jmp		DWORD[s3jmpDest]
 
