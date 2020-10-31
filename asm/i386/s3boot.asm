@@ -13,7 +13,7 @@
 bits 32
 org 0x5000
 
-; VERSION 3
+; VERSION 4
 
 jmp main32
 
