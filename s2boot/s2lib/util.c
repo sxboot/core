@@ -157,3 +157,35 @@ void* util_search_mem(char* signature, size_t base, size_t len, size_t alignment
 	}
 	return NULL;
 }
+
+
+uint64_t __udivdi3(uint64_t num, uint64_t den){
+	uint64_t quo = 0;
+	uint64_t rem = 0;
+	for(int i = sizeof(uint64_t) * 8 - 1; i >= 0; i--){
+		rem <<= 1;
+		if(num & (1ULL << i))
+			rem |= 1;
+		if(rem >= den){
+			rem -= den;
+			quo |= 1ULL << i;
+		}
+	}
+	return quo;
+}
+
+uint64_t __umoddi3(uint64_t num, uint64_t den){
+	uint64_t quo = 0;
+	uint64_t rem = 0;
+	for(int i = sizeof(uint64_t) * 8 - 1; i >= 0; i--){
+		rem <<= 1;
+		if(num & (1ULL << i))
+			rem |= 1;
+		if(rem >= den){
+			rem -= den;
+			quo |= 1ULL << i;
+		}
+	}
+	return rem;
+}
+
