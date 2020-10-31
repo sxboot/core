@@ -74,6 +74,7 @@ typedef struct s3boot_map_entry{
 status_t m_init();
 status_t m_attach_firmware_disk_driver(char** firmwareDriveTypeWrite);
 status_t m_firmware_read(uint8_t number, uint64_t sector, uint16_t sectorCount, size_t dest);
+status_t m_firmware_devinfo(uint8_t number, uint64_t* sectors, size_t* sectorSize);
 status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrite);
 status_t m_init_fs_driver(elf_file* file, int* listIndexWrite);
 status_t m_link_bdd();

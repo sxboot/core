@@ -2665,6 +2665,19 @@ reqDIndex	dd	0
 reqSectorCount	dd	0
 reqDest		dd	0
 reqLBA		dq	0
+; drive info
+reqSecCountDest	dd	0
+reqSecSizeDest	dd	0
+
+dInfoTemp:
+dInfoBufSize	dw	0x1e
+dInfoInfoFlags	dw	0
+dInfoCylinders	dd	0
+dInfoHeads		dd	0
+dInfoSecsPTrack	dd	0
+dInfoSectors	dq	0
+dInfoBytesPSec	dw	0
+dInfoPEDD		dd	0
 
 gdt32temp:
 	dw 0
@@ -2744,6 +2757,8 @@ serviceCallback: ; di, si, dx, cx
 	je		.firmwareDriveGetName
 	cmp		edi, 21
 	je		.firmwareDriveRead
+	cmp		edi, 22
+	je		.firmwareDriveInfo
 	mov		eax, 1
 	jmp		.end
 
@@ -3011,6 +3026,62 @@ serviceCallback: ; di, si, dx, cx
 	jmp		.end
 
 
+	.firmwareDriveInfo:
+	mov		DWORD[reqDIndex], esi
+	mov		DWORD[reqSecCountDest], edx
+	mov		DWORD[reqSecSizeDest], ecx
+
+	cmp		DWORD[reqDIndex], 0x7f
+	jbe		.driveInfo_validD
+	mov		DWORD[retCode], 13 ; TSX_NO_DEVICE
+	jmp		.driveInfo_end
+	.driveInfo_validD:
+
+
+	mov		WORD[srvModeSwitchAddr], .driveInfo_to16ret
+	jmp		to16
+	.driveInfo_to16ret:
+	bits 16
+
+
+	mov		ah, 0x48
+	mov		dl, BYTE[reqDIndex]
+	add		dl, 0x80
+	mov		si, dInfoTemp
+	int		0x13
+	jc		.driveInfo_err
+
+	mov		WORD[retCode], 0
+	jmp		.driveInfo_done
+	.driveInfo_err:
+	mov		WORD[retCode], 19 ; TSX_IO_ERROR
+	.driveInfo_done:
+
+
+	mov		WORD[srvModeSwitchAddr], .driveInfo_from16ret
+	jmp		from16
+	.driveInfo_from16ret:
+	bits 32
+
+
+	cmp		DWORD[retCode], 0
+	jne		.driveInfo_err2
+	mov		edi, DWORD[reqSecCountDest]
+	mov		edx, DWORD[dInfoSectors]
+	mov		DWORD[edi], edx
+	mov		edx, DWORD[dInfoSectors + 4]
+	mov		DWORD[edi + 4], edx
+	mov		edi, DWORD[reqSecSizeDest]
+	movzx	edx, WORD[dInfoBytesPSec]
+	mov		DWORD[edi], edx
+	.driveInfo_err2:
+
+
+	.driveInfo_end:
+	mov		eax, DWORD[retCode]
+	jmp		.end
+
+
 	.end:
 	pop		esi
 	pop		edi
@@ -3020,7 +3091,6 @@ serviceCallback: ; di, si, dx, cx
 
 to16:
 	bits	32
-	; go back to 16 bit to use vbe
 	cli
 	sgdt	[gdt32temp]
 	sidt	[idt32temp]

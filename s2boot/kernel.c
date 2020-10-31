@@ -293,7 +293,7 @@ status_t m_attach_firmware_disk_driver(char** firmwareDriveTypeWrite){
 	char* firmwareDriveType;
 	status = m_upstream_callback(20, (size_t) &firmwareDriveType, 0, 0);
 	CERROR();
-	status = msio_attach_driver(firmwareDriveType, &m_firmware_read, NULL);
+	status = msio_attach_driver(firmwareDriveType, &m_firmware_devinfo, &m_firmware_read, NULL);
 	CERROR();
 	log_debug("Attached firmware driver: type=%s\n", firmwareDriveType);
 	if(firmwareDriveTypeWrite)
@@ -309,6 +309,13 @@ status_t m_firmware_read(uint8_t number, uint64_t sector, uint16_t sectorCount, 
 	args.dest = dest;
 	args.lba = sector;
 	status_t status = m_upstream_callback(21, (size_t) &args, 0, 0);
+	CERROR();
+	_end:
+	return status;
+}
+
+status_t m_firmware_devinfo(uint8_t number, uint64_t* sectors, size_t* sectorSize){
+	status_t status = m_upstream_callback(22, (size_t) number, (size_t) sectors, (size_t) sectorSize);
 	CERROR();
 	_end:
 	return status;
@@ -338,6 +345,9 @@ status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrit
 	status = dynl_load_and_link_to_static_elf(file, (size_t) address, m_elf_images->base[m_elf_image_kernel_index] /* link against s2boot (kernel) */);
 	CERROR();
 	elf_symtab* initsymtab = elf_get_symtab_entry(file, "msio_init"); // optional
+	elf_symtab* infosymtab = elf_get_symtab_entry(file, "msio_get_device_info");
+	if(infosymtab == 0)
+		FERROR(TSX_UNDEFINED_REFERENCE);
 	elf_symtab* readsymtab = elf_get_symtab_entry(file, "msio_read");
 	if(readsymtab == 0)
 		FERROR(TSX_UNDEFINED_REFERENCE);
@@ -355,6 +365,7 @@ status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrit
 		CERROR();
 	}
 	status = msio_attach_driver(type,
+		(MSIO_DRIVER_INFO)(infosymtab->st_value + address),
 		(MSIO_DRIVER_READ)(readsymtab->st_value + address),
 		(MSIO_DRIVER_WRITE)(writesymtab->st_value + address));
 	CERROR();

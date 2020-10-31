@@ -868,7 +868,7 @@ status_t suboot_get_sxboot_status(EFI_STATUS s){
 	uint8_t efistat = (uint8_t) s;
 	if(efistat >= 19)
 		return 1;
-	return sxboot_status[s];
+	return sxboot_status[efistat];
 }
 
 status_t S2_API suboot_callback(size_t num, size_t arg0, size_t arg1, size_t arg2){
@@ -938,6 +938,13 @@ status_t S2_API suboot_callback(size_t num, size_t arg0, size_t arg1, size_t arg
 		EFI_STATUS status = suboot_read_sectors(rdata->num, rdata->lba, rdata->numSectors, (void*) rdata->dest);
 		if(EFI_ERROR(status))
 			return suboot_get_sxboot_status(status);
+	}else if(num == 22){ // firmware disk info
+		if(bootServicesExited)
+			return 1;
+		if(arg0 >= devicesNum)
+			return suboot_get_sxboot_status(EFI_NO_MEDIA);
+		*((uint64_t*) arg1) = devices[arg0]->Media->LastBlock;
+		*((size_t*) arg2) = devices[arg0]->Media->BlockSize;
 	}else{
 		return 1;
 	}
