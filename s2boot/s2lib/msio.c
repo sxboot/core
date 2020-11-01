@@ -26,6 +26,9 @@
 static list_array* msio_drivers = NULL;
 static list_array* msio_devices = NULL;
 
+static size_t cache_misses = 0;
+static size_t cache_hits = 0;
+
 status_t msio_init(){
 	status_t status = 0;
 	msio_drivers = list_array_create(0);
@@ -69,9 +72,23 @@ status_t msio_read_drive(char* driveLabel, uint64_t sector, uint16_t sectorCount
 	status_t status = 0;
 	void* tmpBuf = 0;
 	size_t tmpBufSize = 0;
+	if(sectorCount == 0)
+		goto _end;
+
 	msio_device* dev = 0;
 	status = msio_get_device(driveLabel, &dev);
 	CERROR();
+	if(sectorCount == 1){
+		for(size_t i = 0; i < dev->cache->length; i++){
+			msio_cache_entry* centry = dev->cache->base[i];
+			if(centry->lba == sector){
+				cache_hits++;
+				memcpy((void*) dest, centry->data, 512);
+				goto _end;
+			}
+		}
+	}
+	cache_misses++;
 	if(dev->sectorSize == 512){
 		status = dev->driver->read(dev->number, sector, sectorCount, dest);
 		CERROR();
@@ -89,6 +106,15 @@ status_t msio_read_drive(char* driveLabel, uint64_t sector, uint16_t sectorCount
 		status = dev->driver->read(dev->number, lgLBA, lgCount, (size_t) tmpBuf);
 		CERROR();
 		memcpy((void*) dest, tmpBuf + (dev->sectorSize >= 512 ? ((sector % (dev->sectorSize / 512)) * 512) : 0), sectorCount * 512);
+	}
+	if(sectorCount == 1){
+		msio_cache_entry* cacheEntry = kmalloc(sizeof(msio_cache_entry));
+		if(cacheEntry){
+			cacheEntry->lba = sector;
+			memcpy(cacheEntry->data, (void*) dest, 512);
+			status = list_array_push(dev->cache, cacheEntry);
+			CERROR();
+		}
 	}
 	_end:
 	if(tmpBuf)
@@ -133,11 +159,17 @@ status_t msio_get_device(char* driveLabel, msio_device** deviceWrite){
 	msio_device* dev = kmalloc(sizeof(msio_device));
 	if(!dev)
 		FERROR(TSX_OUT_OF_MEMORY);
+	dev->cache = list_array_create(0);
+	if(!dev->cache){
+		kfree(dev, sizeof(msio_device));
+		FERROR(TSX_OUT_OF_MEMORY);
+	}
 	memcpy(dev->name, driveLabel, strlen(driveLabel) + 1);
 	dev->number = number;
 	dev->driver = driver;
 	dev->sectors = sectors;
 	dev->sectorSize = sectorSize;
+	reloc_ptr((void**) &dev->cache);
 	reloc_ptr((void**) &dev->driver);
 	list_array_push(msio_devices, dev);
 	*deviceWrite = dev;
@@ -175,6 +207,13 @@ void cli_command_devinfo(uint8_t dest, char* args){
 		kernel_print_error_trace();
 		return;
 	}
-	cli_printf(dest, "Device %s: %u sectors (%uMiB); %u-byte sectors; driver @ %X\n", dev->name, (size_t) dev->sectors,
-		(size_t) (dev->sectors * dev->sectorSize / 1024 / 1024), dev->sectorSize, dev->driver);
+	cli_printf(dest, "Device %s: %u sectors (%uMiB); %u-byte sectors; %u sectors cached; driver @ %X\n", dev->name, (size_t) dev->sectors,
+		(size_t) (dev->sectors * dev->sectorSize / 1024 / 1024), dev->sectorSize, dev->cache->length, dev->driver);
+}
+
+void cli_command_dbgcache(uint8_t dest, char* args){
+	size_t efficiency = 0;
+	if(cache_hits + cache_misses > 0)
+		efficiency = cache_hits * 100 / (cache_misses + cache_hits);
+	cli_printf(dest, "%u cache misses, %u cache hits (%u%)\n", cache_misses, cache_hits, efficiency);
 }

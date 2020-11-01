@@ -13,6 +13,7 @@
 #ifndef __KERNEL_MSIO_H__
 #define __KERNEL_MSIO_H__
 
+#include <kernel/list.h>
 
 typedef status_t (*MSIO_DRIVER_INFO)(uint8_t number, uint64_t* sectors, size_t* sectorSize);
 typedef status_t (*MSIO_DRIVER_READ)(uint8_t number, uint64_t sector, uint16_t sectorCount, size_t dest);
@@ -32,7 +33,13 @@ typedef struct msio_device{
 	msio_device_driver* driver;
 	uint64_t sectors;
 	size_t sectorSize;
+	list_array* cache;
 } msio_device;
+
+typedef struct msio_cache_entry{
+	uint64_t lba;
+	uint8_t data[512];
+} msio_cache_entry;
 #pragma pack(pop)
 
 status_t msio_init();
