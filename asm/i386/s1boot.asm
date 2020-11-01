@@ -17,12 +17,13 @@ org 0x1000
 ;        0x1000+   s1boot
 ;0x7800 - 0x7c00   stack
 ;0x7c00 - 0x7dff   s0boot (mbr/vbr for mbr/chain loading)
-;0x7e00 - 0x7fff   sGboot / temp/FAT entries for loading s2boot
-;0x00008000 - 0x0002ffff   s2boot + bdd.so unparsed
-;0x00030000 - 0x0005ffff   s2boot
-;0x00060000 - 0x00063fff   page mappings
+;0x7e00 - 0x7fff   sGboot
+;0x8000 - 0x8fff   temp/FAT entries for loading s2boot
+;0x00009000 - 0x0003ffff   s2boot + bdd.so unparsed
+;0x00040000 - 0x0006ffff   s2boot
 ;0x00070000 - 0x00072fff   bios memory map
 ;0x00073000 - 0x0007ffff   s2boot map
+;0x00076000 - 0x00079fff   page mappings
 
 ;------------------------------------------------------------
 ;     MAIN STARTUP AREA
@@ -32,7 +33,7 @@ s1bootStartAddr:
 
 jmp main16
 
-%define s2bootFileLoad 0x8000
+%define s2bootFileLoad 0x9000
 %define s2bootMapLocation 0x73000
 
 align 8, db 0xcc
@@ -1470,9 +1471,9 @@ boot16:
 ;     FAT 16 BOOT
 ;------------------------------------------------------------
 
-%define s2bootStart 0x30000
-%define s2bootStartVirt 0x00030000
-%define s2bootEndVirt 0x00060000
+%define s2bootStart 0x40000
+%define s2bootStartVirt 0x00040000
+%define s2bootEndVirt 0x00070000
 %define s2bootMaxSize s2bootEndVirt - s2bootStartVirt
 
 bootFS1		db	"Detected file system: ", 0
@@ -1686,7 +1687,7 @@ loadFAT16File:
 	call	readSectors16
 	jc		.read_fail
 
-	mov		bx, 0x7e00
+	mov		bx, 0x8000
 	pop		dx
 	mov		WORD[bx], dx
 	add		bx, 2
@@ -1706,12 +1707,12 @@ loadFAT16File:
 	cmp		dx, 0xfff8
 	jae		.data_init
 	add		bx, 2
-	cmp		bx, 0x8000
+	cmp		bx, 0x9000
 	jae		.fail
 	jmp		.fat_read
 	.data_init:
 	call	updateLoadingWheel16
-	mov		si, 0x7e00
+	mov		si, 0x8000
 	xor		ebx, ebx
 	mov		ebx, DWORD[fat16readDest]
 	.data_read:
@@ -1801,7 +1802,7 @@ loadS2:
 	mov		edx, DWORD[fat16readFSize] ; set to file size of last file read by loadFAT16File
 	mov		DWORD[s2bSize], edx
 	and		edx, 0xffffff00
-	add		edx, 0x8100
+	add		edx, s2bootFileLoad + 0x100
 	cmp		edx, s2bootStart
 	jae		.files_too_large
 
@@ -2572,19 +2573,22 @@ parseELF32:
 	ret
 
 ; map (phys) 0x0000000000000000 - 0x0000000000400000 to (virt) 0x0000000000000000
-; 0x00060000 - 0x00061000: page directory table
-; 0x00061000 - 0x00062000: page table for first mapping
+; 0x00076000 - 0x00077000: page directory table
+; 0x00077000 - 0x00078000: page table for first mapping
+
+%define pageTablesBase 0x76000
+
 setupPaging:
 	push	eax
 	push	ecx
 	push	edx
 	push	edi
 	; page directory table
-	mov		DWORD[0x60000], 0x61003 ; phys address 0x61000, set present (0x1) and r/w (0x2) bit
+	mov		DWORD[pageTablesBase], pageTablesBase + 0x1003 ; phys address 0x1000, set present (0x1) and r/w (0x2) bit
 
 	; page tables
 	mov		ecx, 1024
-	mov		edi, 0x61000
+	mov		edi, pageTablesBase + 0x1000
 	mov		edx, 0x3
 	.writePT:
 	mov		DWORD[edi], edx
@@ -2592,7 +2596,7 @@ setupPaging:
 	add		edx, 0x1000
 	loop	.writePT
 
-	mov		eax, 0x60000
+	mov		eax, pageTablesBase
 	mov		cr3, eax
 
 	mov		eax, cr0
