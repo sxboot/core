@@ -12,14 +12,112 @@
 
 #include <klibc/stdlib.h>
 #include <klibc/stdbool.h>
+#include <klibc/string.h>
+#include <klibc/stdio.h>
 #include <kernel/mmgr.h>
 
 
 
+typedef struct smalloc_block{
+	uint64_t magic;
+	uint64_t allocation;
+	struct smalloc_block* next;
+} smalloc_block;
+
+#define SMALLOC_BLOCK_MAGIC 0xc91110e742414d53
+#define SMALLOC_ALLOCATION_SIZE 64
+#define SMALLOC_BLOCKS 64
+
 size_t stdMemUsage = 0;
 size_t stdBlockUsage = 0;
 
-void* kmalloc(size_t size){
+smalloc_block* smalloc_list = NULL;
+
+void stdlib_init(){
+	reloc_ptr((void**) &smalloc_list);
+}
+
+bool stdlib_init_smab_list(){
+	if(!smalloc_list){
+		smalloc_list = vmmgr_alloc_block();
+		if(!smalloc_list)
+			return FALSE;
+		stdBlockUsage++;
+		memset(smalloc_list, 0, MMGR_BLOCK_SIZE);
+		smalloc_list->magic = SMALLOC_BLOCK_MAGIC;
+		smalloc_list->allocation = 1;
+	}
+	return TRUE;
+}
+
+void* stdlib_alloc_single_from_smab(smalloc_block* block){
+	for(size_t i = 1; i < SMALLOC_BLOCKS; i++){
+		if(!(block->allocation & (1ULL << i))){
+			block->allocation |= 1ULL << i;
+			return (void*) block + i * SMALLOC_ALLOCATION_SIZE;
+		}
+	}
+	return NULL;
+}
+
+void* stdlib_alloc_sequential_from_smab(smalloc_block* block, size_t blocks){
+	for(size_t i = 1; i < SMALLOC_BLOCKS; i++){
+		if(!(block->allocation & (1ULL << i))){
+			if(i + blocks >= SMALLOC_BLOCKS)
+				return NULL;
+			size_t k = i;
+			for(; k < i + blocks; k++){
+				if(block->allocation & (1ULL << k))
+					break;
+			}
+			if(k == i + blocks){
+				for(size_t l = i; l < k; l++)
+					block->allocation |= 1ULL << l;
+				return (void*) block + i * SMALLOC_ALLOCATION_SIZE;
+			}
+			i += k - i;
+		}
+	}
+	return NULL;
+}
+
+void* stdlib_smab_alloc(size_t size){
+	if(!stdlib_init_smab_list())
+		return NULL;
+	size_t blocks = size / SMALLOC_ALLOCATION_SIZE;
+	if(size % SMALLOC_ALLOCATION_SIZE != 0)
+		blocks++;
+	smalloc_block* block = smalloc_list;
+	smalloc_block* lastBlock = NULL;
+	while(block){
+		lastBlock = block;
+		if(block->allocation != 0xffffffffffffffff){
+			void* addr = NULL;
+			if(blocks == 1){
+				addr = stdlib_alloc_single_from_smab(block);
+			}else{
+				addr = stdlib_alloc_sequential_from_smab(block, blocks);
+			}
+			if(addr)
+				return addr;
+		}
+		block = block->next;
+	}
+	smalloc_block* newBlock = vmmgr_alloc_block();
+	if(!newBlock)
+		return NULL;
+	stdBlockUsage++;
+	memset(newBlock, 0, MMGR_BLOCK_SIZE);
+	newBlock->magic = SMALLOC_BLOCK_MAGIC;
+	newBlock->allocation = 1;
+	lastBlock->next = newBlock;
+	reloc_ptr((void**) &lastBlock->next);
+	for(size_t i = 1; i < blocks + 1; i++)
+		newBlock->allocation |= 1ULL << i;
+	return (void*) newBlock + SMALLOC_ALLOCATION_SIZE;
+}
+
+void* kmalloc_aligned(size_t size){
 	stdBlockUsage += size / MMGR_BLOCK_SIZE;
 	if(size % MMGR_BLOCK_SIZE != 0)
 		stdBlockUsage++;
@@ -27,7 +125,7 @@ void* kmalloc(size_t size){
 	return vmmgr_alloc_block_sequential(size);
 }
 
-void kfree(void* ptr, size_t size){
+void kfree_aligned(void* ptr, size_t size){
 	stdBlockUsage -= size / MMGR_BLOCK_SIZE;
 	if(size % MMGR_BLOCK_SIZE != 0)
 		stdBlockUsage--;
@@ -38,6 +136,40 @@ void kfree(void* ptr, size_t size){
 		kernel_del_reloc_ptr((void**) addr);
 	}
 	vmmgr_free_block_sequential((size_t) ptr, size);
+}
+
+void* kmalloc(size_t size){
+	void* addr = 0;
+	if(size > (SMALLOC_BLOCKS - 1) * SMALLOC_ALLOCATION_SIZE){
+		addr = kmalloc_aligned(size);
+	}else{
+		stdMemUsage += size;
+		addr = stdlib_smab_alloc(size);
+	}
+	return addr;
+}
+
+void kfree(void* ptr, size_t size){
+	if(size > (SMALLOC_BLOCKS - 1) * SMALLOC_ALLOCATION_SIZE){
+		kernel_runtime_assertion((size_t) ptr % 4096 == 0, "Non-small memory allocation is not block-aligned");
+		kernel_runtime_assertion(*((uint64_t*) ptr) != SMALLOC_BLOCK_MAGIC, "Attempted to free smab block in non-small memory allocation");
+		kfree_aligned(ptr, size);
+	}else{
+		stdMemUsage -= size;
+		smalloc_block* smab = ptr - (size_t) ptr % 4096;
+		kernel_runtime_assertion(smab->magic == SMALLOC_BLOCK_MAGIC, "Small memory allocation is not within a smab block");
+		size_t smab_index = ((size_t) ptr % 4096) / SMALLOC_ALLOCATION_SIZE;
+		kernel_runtime_assertion(smab_index > 0, "Attempted to free smab header block");
+		size_t blocks = size / SMALLOC_ALLOCATION_SIZE;
+		if(size % SMALLOC_ALLOCATION_SIZE != 0)
+			blocks++;
+		kernel_runtime_assertion(smab_index + blocks <= SMALLOC_BLOCKS, "Small memory de-allocation goes beyond SMAB boundary");
+		for(size_t addr = (size_t) ptr; addr < (size_t) ptr + SMALLOC_ALLOCATION_SIZE * blocks; addr += 4){
+			kernel_del_reloc_ptr((void**) addr);
+		}
+		for(size_t i = smab_index; i < smab_index + blocks; i++)
+			smab->allocation &= ~(1ULL << i);
+	}
 }
 
 void kmem(size_t* memKiB, size_t* memBlocks){

@@ -55,6 +55,8 @@
 #include <kernel/kutil.h>
 
 
+void* kmalloc_aligned(size_t size);
+void kfree_aligned(void* ptr, size_t size);
 void* kmalloc(size_t size);
 void kfree(void* ptr, size_t size);
 void kmem(size_t* memKiB, size_t* memBlocks);
