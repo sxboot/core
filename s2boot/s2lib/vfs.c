@@ -305,7 +305,7 @@ status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, lis
 				continue;
 			size_t nameLen = util_str_length_c_max(dirTable[ti].nameShort, ' ', 8);
 			size_t extLen = util_str_length_c_max(dirTable[ti].exShort, ' ', 3);
-			char* name = kmalloc(nameLen + extLen + (extLen > 0 ? 1 : 0));
+			char* name = kmalloc(nameLen + extLen + (extLen > 0 ? 1 : 0) + 1);
 			memcpy(name, dirTable[ti].nameShort, nameLen);
 			name[nameLen] = 0;
 			if(extLen > 0){

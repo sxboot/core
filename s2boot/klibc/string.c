@@ -159,7 +159,7 @@ char* strrepl(char* str, char* sstr, char* repl){
 	}
 	_newstr: {
 	size_t nstrsz = strsz + replsz * count - sstrsz * count;
-	char* nstr = kmalloc(nstrsz);
+	char* nstr = kmalloc(nstrsz + 1);
 	if(!nstr)
 		return NULL;
 	size_t nstri = 0;

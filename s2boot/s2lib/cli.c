@@ -229,7 +229,7 @@ void cli_command_ls(uint8_t dest, char* args){
 	cli_printf(dest, "Directory (%u entries)\n", list->length);
 	for(size_t i = 0; i < list->length; i++){
 		cli_printf(dest, "%s\n", (char*) list->base[i]);
-		kfree(list->base[i], strlen(list->base[i]));
+		kfree(list->base[i], strlen(list->base[i]) + 1);
 	}
 	list_array_delete(list);
 	_ls_error:

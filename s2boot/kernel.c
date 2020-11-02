@@ -103,6 +103,8 @@ static bool s3boot_loaded = FALSE;
 static s3boot_data s3data;
 
 
+void stdlib_init();
+
 extern void jmpImm(size_t destination, size_t arg);
 extern void __dev_i_fault();
 
@@ -160,6 +162,8 @@ status_t m_init(){
 	// we need to add this manually because the reloc_ptr call in list_array_create is ignored because it is called before this returns
 	reloc_ptr((void**) &m_reloc_list->base);
 	reloc_ptr((void**) &m_reloc_list);
+
+	stdlib_init();
 
 	m_elf_images = list_array_create(0);
 	if(m_elf_images == NULL)
@@ -986,7 +990,7 @@ status_t m_boot_mbr(parse_entry* entry){
 	}
 	status = kernel_read_file_s(filePath, ARCH_DEFAULT_MBR_LOCATION);
 	CERROR();
-	kfree(filePath, MMGR_BLOCK_SIZE);
+	kfree(filePath, strlen(filePath) + 1);
 	arch_os_entry_state entryState;
 	memset(&entryState, 0, sizeof(arch_os_entry_state));
 #ifdef ARCH_UPSTREAM_x86
@@ -1033,7 +1037,7 @@ status_t m_boot_binary(parse_entry* entry){
 	}
 	status = kernel_read_file_s(filePath, tempLocation);
 	CERROR();
-	kfree(filePath, MMGR_BLOCK_SIZE);
+	kfree(filePath, strlen(filePath) + 1);
 	s3data.bMode = pbitsNum == 16 ? KERNEL_S3BOOT_BMODE_16 : (pbitsNum == 32 ? KERNEL_S3BOOT_BMODE_32 : KERNEL_S3BOOT_BMODE_64);
 	s3data.jmp = pdestinationNum + poffsetNum;
 	s3data.entryStateStruct = 0;
@@ -1062,7 +1066,7 @@ status_t m_boot_image(parse_entry* entry){
 	size_t tempLocation = 0;
 	status = kernel_read_file(filePath, &tempLocation, &size);
 	CERROR();
-	kfree(filePath, MMGR_BLOCK_SIZE);
+	kfree(filePath, strlen(filePath) + 1);
 	if(elf32_is_elf((elf32_file*) tempLocation)){
 		elf32_file* file = (elf32_file*) tempLocation;
 		if(file->ei_class == ELF_CLASS_32BIT){
@@ -1320,13 +1324,13 @@ status_t kernel_read_file_alloc(char* path, size_t* destWrite, size_t* sizeWrite
 char* kernel_write_boot_file(char* filename){						// Examples when boot partition is "ahci1.0":
 	char* repl_bdrive = strrepl(filename, "[BDRIVE]", bootPartLabel); // = ahci1.0
 	char* repl_drive = strrepl(repl_bdrive, "[DRIVE]", bootDriveLabel); // = ahci1
-	kfree(repl_bdrive, strlen(repl_bdrive));
+	kfree(repl_bdrive, strlen(repl_bdrive) + 1);
 	char* repl_part = strrepl(repl_drive, "[PART]", bootPartNumStr); // = 0
-	kfree(repl_drive, strlen(repl_drive));
+	kfree(repl_drive, strlen(repl_drive) + 1);
 	char* repl_drivetype = strrepl(repl_part, "[DRIVETYPE]", bootDriveType); // = ahci
-	kfree(repl_part, strlen(repl_part));
+	kfree(repl_part, strlen(repl_part) + 1);
 	char* repl_drivenum = strrepl(repl_drivetype, "[DRIVENUM]", bootDriveNumStr); // = 1
-	kfree(repl_drivetype, strlen(repl_drivetype));
+	kfree(repl_drivetype, strlen(repl_drivetype) + 1);
 	return repl_drivenum;
 }
 
