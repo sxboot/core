@@ -137,6 +137,9 @@ status_t vmmgr_map_page(size_t phys, size_t virt){
 	if(tlt == 0)
 		return 34;
 
+	if(vmmgr_get_physical(virt))
+		vmmgr_unmap_page(virt);
+
 	uint16_t flags = VMMGR_PAGE_PRESENT | VMMGR_PAGE_RW;
 
 	//11111111111111111111111111111111
