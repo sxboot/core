@@ -688,7 +688,6 @@ void m_print_title(char* s){
 void m_show_menu(){
 	if(m_state != KERNEL_STATE_RUN)
 		return;
-	stdio64_save_vid_mem();
 	clearScreen(0x7);
 	setCursorPosition(0, 24);
 	m_state = KERNEL_STATE_MENU;
@@ -701,7 +700,8 @@ void m_close_menu(){
 	if(m_state != KERNEL_STATE_MENU)
 		return;
 	m_state = KERNEL_STATE_RUN;
-	stdio64_restore_vid_mem();
+	clearScreen(0x7);
+	reprintText();
 }
 
 void m_menu_paint(){
@@ -1119,7 +1119,14 @@ char* m_resolve_unknown_symbol(size_t addr, size_t* functionOffsetWrite){
 }
 
 
+static size_t timerCounter = 0;
+
 void m_on_timer(){
+	if(timerCounter > 10){
+		timerCounter = 0;
+		stdio64_update_screen();
+	}
+	timerCounter++;
 }
 
 
@@ -1200,7 +1207,7 @@ int _start(s1boot_data* data){
 		kernel_print_error_trace();
 	}
 	printNlnr();
-	HALT();
+	kernel_halt();
 	return status;
 }
 
@@ -1435,6 +1442,7 @@ void* kernel_get_address_for_symbol_in_image(elf_loaded_image* image, char* symb
 
 void kernel_halt(){
 	printf("Halted\n");
+	stdio64_update_screen();
 	_halt:
 	HALT();
 	goto _halt;
@@ -1466,6 +1474,8 @@ void kernel_move_stack(size_t stackTop, size_t newStackSize){
 
 
 status_t kernel_set_video(size_t width, size_t height, size_t bpp, bool graphics){
+	bool inte = arch_is_hw_interrupts_enabled();
+	arch_disable_hw_interrupts();
 	ucallback_videomode vidmode;
 	vidmode.width = width;
 	vidmode.height = height;
@@ -1482,6 +1492,8 @@ status_t kernel_set_video(size_t width, size_t height, size_t bpp, bool graphics
 	reprintText();
 	log_debug("Video %ux%ux%u %u fb=0x%X\n", vidmode.width, vidmode.height, vidmode.bpp, (size_t) status, vidmode.framebuffer);
 	_end:
+	if(inte)
+		arch_enable_hw_interrupts();
 	return status;
 }
 
@@ -1591,6 +1603,7 @@ status_t kernel_relocate(size_t newAddr){
 	*/
 	return TSX_UNSUPPORTED;
 #endif
+	bool inte = arch_is_hw_interrupts_enabled();
 	arch_disable_hw_interrupts();
 	size_t oldAddr = m_reloc_base;
 
@@ -1646,7 +1659,8 @@ status_t kernel_relocate(size_t newAddr){
 	cRelocNewAddr = 0;
 
 	m_reloc_base = newAddr;
-	arch_enable_hw_interrupts();
+	if(inte)
+		arch_enable_hw_interrupts();
 
 	return status;
 }
@@ -1746,7 +1760,7 @@ void kernel_jump(arch_os_entry_state* entryState, size_t dest, size_t mode, uint
 	if(status == TSX_SUCCESS)
 		status = m_s3boot();
 	log_fatal("s3boot call failed: %u (%s)\n", status, errcode_get_name(status));
-	HALT();
+	kernel_halt();
 }
 
 

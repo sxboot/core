@@ -38,6 +38,12 @@ static size_t textLogIndex = 0;
 
 static size_t fontScale = 10;
 
+static uint8_t* framebufferModificationMap = 0;
+static size_t framebufferModificationMapLen = 0;
+
+static bool framebufferUpdates = TRUE;
+static bool framebufferChanged = FALSE;
+
 size_t cursorX = 0;
 size_t cursorY = 0;
 size_t totalX = 0;
@@ -54,8 +60,6 @@ size_t videoMemLen = 0;
 
 void* videoMemBuf = 0;
 size_t videoMemBufLen = 0;
-size_t prevCursorX = 0;
-size_t prevCursorY = 0;
 
 uint64_t font7x8[] = {
 	0x0000000000000000,
@@ -213,6 +217,7 @@ status_t stdio64_init(){
 	status_t status = 0;
 	reloc_ptr(&videoMem);
 	reloc_ptr(&videoMemBuf);
+	reloc_ptr((void**) &framebufferModificationMap);
 	reloc_ptr((void**) &textLog);
 	status = stdio64_reallocmem();
 	CERROR();
@@ -232,29 +237,22 @@ status_t stdio64_reallocmem(){
 		videoMemBufLen = 0;
 	}
 	if(videoMemLen){
-		videoMemBuf = kmalloc(videoMemLen);
+		videoMemBufLen = videoMemLen;
+		videoMemBuf = kmalloc(videoMemBufLen);
 		if(videoMemBuf == 0)
 			FERROR(TSX_OUT_OF_MEMORY);
-		videoMemBufLen = videoMemLen;
+		memset(videoMemBuf, 0, videoMemBufLen);
+
+		framebufferModificationMapLen = videoMemLen / videoBytesPerPixel / STDIO64_FB_MOD_MAP_PIXELS_PER_CELL / 8;
+		framebufferModificationMap = kmalloc(framebufferModificationMapLen);
+		if(framebufferModificationMap == 0)
+			FERROR(TSX_OUT_OF_MEMORY);
+		memset(framebufferModificationMap, 0, framebufferModificationMapLen);
 	}
 	_end:
 	return status;
 }
 
-
-void stdio64_save_vid_mem(){
-	if(videoMemBuf == 0)
-		return;
-	memcpy(videoMemBuf, videoMem, videoMemLen);
-	saveCursorPosition();
-}
-
-void stdio64_restore_vid_mem(){
-	if(videoMemBuf == 0)
-		return;
-	memcpy(videoMem, videoMemBuf, videoMemLen);
-	restoreCursorPosition();
-}
 
 void stdio64_set_mode(uint8_t mode, void* framebuffer, size_t width, size_t height, size_t bpp, size_t bytesPerLine){
 #if STDIO64_ARCH_HAS_TEXT == 0
@@ -333,6 +331,29 @@ void stdio64_set_font_scale(size_t scale){
 
 bool stdio64_available(){
 	return videoMode != 0;
+}
+
+void stdio64_update_screen(){
+	if(!framebufferChanged || !framebufferUpdates || videoMode != STDIO64_MODE_GRAPHICS || !framebufferModificationMap || !videoMemBuf)
+		return;
+	for(size_t fi = 0; fi < framebufferModificationMapLen; fi++){
+		for(size_t i = 0; i < 8; i++){
+			if(!(framebufferModificationMap[fi] & (1ULL << i)))
+				continue;
+			size_t videoMemOff = (fi * 8 + i) * STDIO64_FB_MOD_MAP_PIXELS_PER_CELL * videoBytesPerPixel;
+			memcpy(videoMem + videoMemOff, videoMemBuf + videoMemOff, STDIO64_FB_MOD_MAP_PIXELS_PER_CELL * videoBytesPerPixel);
+		}
+		framebufferModificationMap[fi] = 0;
+	}
+	framebufferChanged = FALSE;
+}
+
+void stdio64_mark_modified(void* addr){
+	if(!videoMemBuf || !framebufferModificationMap || (size_t) addr < (size_t) videoMemBuf || (size_t) addr >= (size_t) videoMemBuf + videoMemBufLen)
+		return;
+	size_t cIndex = ((size_t) addr - (size_t) videoMemBuf) / videoBytesPerPixel / STDIO64_FB_MOD_MAP_PIXELS_PER_CELL;
+	framebufferModificationMap[cIndex / 8] |= (1ULL << (cIndex % 8));
+	framebufferChanged = TRUE;
 }
 
 
@@ -439,6 +460,8 @@ void printNln_nlog(){
 		shiftUp();
 	}
 	updateCursor();
+	if(!arch_is_hw_interrupts_enabled())
+		stdio64_update_screen();
 }
 
 void shiftUp(){
@@ -516,13 +539,9 @@ void incCursorX(){
 }
 
 void saveCursorPosition(){
-	prevCursorX = cursorX;
-	prevCursorY = cursorY;
 }
 
 void restoreCursorPosition(){
-	cursorX = prevCursorX;
-	cursorY = prevCursorY;
 }
 
 void setCursorPosition(size_t x, size_t y){
@@ -577,12 +596,23 @@ void stdio64_text_log(char c, uint8_t attr){
 }
 
 void reprintText(){
-	for(size_t i = textLogIndex + 1; i < STDIO64_TEXT_LOG_LENGTH + textLogIndex; i++){
+	framebufferUpdates = FALSE;
+	size_t startIndex = textLogIndex + 1;
+	size_t lines = 0;
+	for(size_t i = STDIO64_TEXT_LOG_LENGTH + textLogIndex - 1; i >= textLogIndex + 1; i--){
+		startIndex = i;
+		if((textLog[i % STDIO64_TEXT_LOG_LENGTH] & 0xff) == '\n')
+			lines++;
+		if(lines > totalY)
+			break;
+	}
+	for(size_t i = startIndex; i < STDIO64_TEXT_LOG_LENGTH + textLogIndex; i++){
 		uint16_t c = textLog[i % STDIO64_TEXT_LOG_LENGTH];
 		if(c != 0){
 			printChar_nlog(c & 0xff, c >> 8);
 		}
 	}
+	framebufferUpdates = TRUE;
 }
 
 
@@ -604,7 +634,7 @@ void stdio64_def_printCharAt(char ch, uint8_t attr, size_t x, size_t y){
 	uint64_t cfont = ch >= 0 ? font7x8[ch] : font7x8[128];
 	size_t absWidth = STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10;
 	size_t absHeight = STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10;
-	uint8_t* addr = videoMem + y * videoBytesPerLine * absHeight + x * videoBytesPerPixel * absWidth;
+	uint8_t* addr = (videoMemBuf ? videoMemBuf : videoMem) + y * videoBytesPerLine * absHeight + x * videoBytesPerPixel * absWidth;
 	for(int y = 0; y < 8 * fontScale / 10; y++){
 		for(int x = 0; x < absWidth; x++){
 			stdio64_def_writeVGAPixel(addr, attr, cfont & (1ULL << ((x * 10 / fontScale) * 8 + (y * 10 / fontScale))));
@@ -631,38 +661,57 @@ void stdio64_def_writeVGAPixel(uint8_t* addr, uint8_t attr, bool set){
 		*(addr + 1) = (color >> 8) & 0xff;
 		*(addr + 2) = (color >> 16) & 0xff;
 	}
+	stdio64_mark_modified(addr);
 }
 
 void stdio64_def_shiftUp(){
-	uint8_t* addr = videoMem;
+	if(!videoMemBuf)
+		return;
+	uint8_t* addr = videoMemBuf;
 	size_t absHeight = STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10;
 	size_t blank = videoBytesPerLine * absHeight;
 	for(int i = 0; i < videoHeight * videoBytesPerLine - blank; i++){
-		*addr = *(addr + blank);
+		if(*addr != *(addr + blank)){
+			stdio64_mark_modified(addr);
+			*addr = *(addr + blank);
+		}
 		addr++;
 	}
 	for(int i = 0; i < blank; i++){
-		*addr = 0;
+		if(*addr != 0){
+			stdio64_mark_modified(addr);
+			*addr = 0;
+		}
 		addr++;
 	}
 }
 
 void stdio64_def_shiftDown(){
-	uint8_t* addr = videoMem + videoHeight * videoBytesPerLine - 1;
+	if(!videoMemBuf)
+		return;
+	uint8_t* addr = videoMemBuf + videoHeight * videoBytesPerLine - 1;
 	size_t absHeight = STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10;
 	size_t blank = videoBytesPerLine * absHeight;
 	for(int i = 0; i < videoHeight * videoBytesPerLine - blank; i++){
-		*addr = *(addr - blank);
+		if(*addr != *(addr - blank)){
+			stdio64_mark_modified(addr);
+			*addr = *(addr - blank);
+		}
 		addr--;
 	}
 	for(int i = 0; i < blank; i++){
-		*addr = 0;
+		if(*addr != 0){
+			stdio64_mark_modified(addr);
+			*addr = 0;
+		}
 		addr--;
 	}
 }
 
 void stdio64_def_clearScreen(uint8_t attr){
-	for(uint8_t* addr = videoMem; (size_t) addr < videoHeight * videoBytesPerLine + (size_t) videoMem;
+	if(!videoMemBuf)
+		return;
+	for(uint8_t* addr = videoMemBuf; (size_t) addr < videoHeight * videoBytesPerLine + (size_t) videoMemBuf;
 		addr += videoBytesPerPixel){
 		stdio64_def_writeVGAPixel(addr, attr, FALSE);
 	}

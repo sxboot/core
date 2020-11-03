@@ -26,18 +26,20 @@
 
 #define STDIO64_TEXT_LOG_LENGTH 4096
 
+#define STDIO64_FB_MOD_MAP_PIXELS_PER_CELL 5
+
 
 status_t stdio64_init();
 status_t stdio64_reallocmem();
 
-void stdio64_save_vid_mem();
-void stdio64_restore_vid_mem();
 void stdio64_set_mode(uint8_t mode, void* framebuffer, size_t width, size_t height, size_t bpp, size_t bytesPerLine);
 void stdio64_get_mode(uint8_t* mode, size_t* width, size_t* height, size_t* bpp, size_t* pitch, void** framebuffer);
 void stdio64_get_text_size(size_t* rows, size_t* cols);
 void stdio64_get_cursor_pos(size_t* x, size_t* y);
 void stdio64_set_font_scale(size_t scale);
 bool stdio64_available();
+void stdio64_update_screen();
+void stdio64_mark_modified(void* addr);
 
 void print(char* string, uint8_t attr);
 void printp(char* string, uint8_t attr);
