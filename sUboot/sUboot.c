@@ -65,8 +65,6 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE* _systemTab
 
 	memset(&s1data, 0, sizeof(s1boot_data));
 
-	suboot_println("sUboot preinit");
-
 	status = suboot_set_graphics();
 	if(EFI_ERROR(status))
 		goto _error;
@@ -433,45 +431,41 @@ EFI_STATUS suboot_set_graphics(){
 		goto _end;
 	graphicsOutputProtocol = gop;
 
-	bool found = false;
-	for(int m = 0; m < 2; m++){
-		suboot_print("Attempting to set video mode ");
-		suboot_print_dec(preferredGraphicsModes[m][0]);
-		suboot_print("x");
-		suboot_print_dec(preferredGraphicsModes[m][1]);
-		suboot_println("x32");
-		EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* modeInfo = NULL;
-		UINTN modeInfoSize = 0;
-		for(UINT32 i = 0; i < gop->Mode->MaxMode; i++){
-			status = gop->QueryMode(gop, i, &modeInfoSize, &modeInfo);
-			if(EFI_ERROR(status) || modeInfo == NULL)
-				continue;
-			if(modeInfo->HorizontalResolution == preferredGraphicsModes[m][0] && modeInfo->VerticalResolution == preferredGraphicsModes[m][1] &&
-				(modeInfo->PixelFormat == PixelBlueGreenRedReserved8BitPerColor || modeInfo->PixelFormat == PixelRedGreenBlueReserved8BitPerColor)){
-				found = true;
-				systemTable->BootServices->Stall(200000);
-				gop->SetMode(gop, i);
-				s1data.framebufferBase = gop->Mode->FrameBufferBase;
-				s1data.videoWidth = modeInfo->HorizontalResolution;
-				s1data.videoHeight = modeInfo->VerticalResolution;
-				s1data.videoPitch = modeInfo->PixelsPerScanLine * 4;
-				s1data.videoBpp = 32;
-				s1data.videoMode = 0;
-				break;
+	if(!(gop->Mode->Info->PixelFormat == PixelBlueGreenRedReserved8BitPerColor || gop->Mode->Info->PixelFormat == PixelRedGreenBlueReserved8BitPerColor)){
+		bool found = false;
+		for(int m = 0; m < 2; m++){
+			suboot_print("Attempting to set video mode ");
+			suboot_print_dec(preferredGraphicsModes[m][0]);
+			suboot_print("x");
+			suboot_print_dec(preferredGraphicsModes[m][1]);
+			suboot_println("x32");
+			EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* modeInfo = NULL;
+			UINTN modeInfoSize = 0;
+			for(UINT32 i = 0; i < gop->Mode->MaxMode; i++){
+				status = gop->QueryMode(gop, i, &modeInfoSize, &modeInfo);
+				if(EFI_ERROR(status) || modeInfo == NULL)
+					continue;
+				if(modeInfo->HorizontalResolution == preferredGraphicsModes[m][0] && modeInfo->VerticalResolution == preferredGraphicsModes[m][1] &&
+					(modeInfo->PixelFormat == PixelBlueGreenRedReserved8BitPerColor || modeInfo->PixelFormat == PixelRedGreenBlueReserved8BitPerColor)){
+					found = true;
+					systemTable->BootServices->Stall(200000);
+					gop->SetMode(gop, i);
+					break;
+				}
+				modeInfo = NULL;
 			}
-			modeInfo = NULL;
+			if(found)
+				break;
 		}
-		if(found)
-			break;
 	}
-	if(!found){
-		status = EFI_NOT_FOUND;
-		suboot_println("No suitable video mode found");
-		goto _end;
-	}
+	s1data.framebufferBase = gop->Mode->FrameBufferBase;
+	s1data.videoWidth = gop->Mode->Info->HorizontalResolution;
+	s1data.videoHeight = gop->Mode->Info->VerticalResolution;
+	s1data.videoPitch = gop->Mode->Info->PixelsPerScanLine * 4;
+	s1data.videoBpp = 32;
+	s1data.videoMode = 0;
 
 	_end:
-	suboot_printNln();
 	return status;
 }
 
