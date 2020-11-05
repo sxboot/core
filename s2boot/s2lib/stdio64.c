@@ -241,7 +241,7 @@ status_t stdio64_reallocmem(){
 		videoMemBuf = kmalloc(videoMemBufLen);
 		if(videoMemBuf == 0)
 			FERROR(TSX_OUT_OF_MEMORY);
-		memset(videoMemBuf, 0, videoMemBufLen);
+		memcpy(videoMemBuf, videoMem, videoMemLen);
 
 		framebufferModificationMapLen = videoMemLen / videoBytesPerPixel / STDIO64_FB_MOD_MAP_PIXELS_PER_CELL / 8;
 		framebufferModificationMap = kmalloc(framebufferModificationMapLen);
@@ -619,9 +619,14 @@ void reprintText(){
 
 // default functions for a linear framebuffer
 
+size_t lastCursorX = 0;
+size_t lastCursorY = 0;
+
+size_t loadingWheelPos = 0;
+
 void stdio64_def_delChar(){
 	if(cursorX <= 0){
-		cursorX = videoWidth / STDIO64_GRAPHICS_CHAR_WIDTH - 1;
+		cursorX = videoWidth / (STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10) - 1;
 		printCharAt(0x20, 0, cursorX, cursorY - 1);
 		shiftDown();
 	}else{
@@ -634,18 +639,22 @@ void stdio64_def_printCharAt(char ch, uint8_t attr, size_t x, size_t y){
 	uint64_t cfont = ch >= 0 ? font7x8[ch] : font7x8[128];
 	size_t absWidth = STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10;
 	size_t absHeight = STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10;
-	uint8_t* addr = (videoMemBuf ? videoMemBuf : videoMem) + y * videoBytesPerLine * absHeight + x * videoBytesPerPixel * absWidth;
-	for(int y = 0; y < 8 * fontScale / 10; y++){
-		for(int x = 0; x < absWidth; x++){
-			stdio64_def_writeVGAPixel(addr, attr, cfont & (1ULL << ((x * 10 / fontScale) * 8 + (y * 10 / fontScale))));
-			addr += videoBytesPerPixel;
+	for(int cy = 0; cy < 8 * fontScale / 10; cy++){
+		for(int cx = 0; cx < absWidth; cx++){
+			stdio64_def_writeVGAPixel(cx + x * absWidth, cy + y * absHeight, attr, cfont & (1ULL << ((cx * 10 / fontScale) * 8 + (cy * 10 / fontScale))));
 		}
-		addr += videoBytesPerLine - videoBytesPerPixel * absWidth;
 	}
 }
 
-void stdio64_def_writeVGAPixel(uint8_t* addr, uint8_t attr, bool set){
+void stdio64_def_writeVGAPixel(size_t x, size_t y, uint8_t attr, bool set){
 	uint32_t color = set ? cgaColors[attr & 0xf] : cgaColors[(attr >> 4) & 0xf];
+	stdio64_def_writeVGAPixelCol(x, y, color);
+}
+
+void stdio64_def_writeVGAPixelCol(size_t x, size_t y, size_t color){
+	if(x >= videoWidth || y >= videoHeight)
+		return;
+	uint8_t* addr = (videoMemBuf ? videoMemBuf : videoMem) + y * videoBytesPerLine + x * videoBytesPerPixel;
 	if(videoBpp == 15){
 		uint16_t pixel = ((color >> 9) & 0x7c00) | ((color >> 6) & 0x3e0) | ((color >> 3) & 0x1f);
 		*((uint16_t*) addr) = pixel;
@@ -684,6 +693,8 @@ void stdio64_def_shiftUp(){
 		}
 		addr++;
 	}
+	if(lastCursorY > 0)
+		lastCursorY--;
 }
 
 void stdio64_def_shiftDown(){
@@ -706,20 +717,33 @@ void stdio64_def_shiftDown(){
 		}
 		addr--;
 	}
+	if(lastCursorY < totalY - 1)
+		lastCursorY++;
 }
 
 void stdio64_def_clearScreen(uint8_t attr){
 	if(!videoMemBuf)
 		return;
-	for(uint8_t* addr = videoMemBuf; (size_t) addr < videoHeight * videoBytesPerLine + (size_t) videoMemBuf;
-		addr += videoBytesPerPixel){
-		stdio64_def_writeVGAPixel(addr, attr, FALSE);
+	for(int y = 0; y < videoHeight; y++){
+		for(int x = 0; x < videoWidth; x++){
+			stdio64_def_writeVGAPixel(x, y, attr, FALSE);
+		}
 	}
 	cursorX = 0;
 	cursorY = 0;
 }
 
 void stdio64_def_updateCursor(){
+	for(size_t i = 0; i < STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10; i++){
+		stdio64_def_writeVGAPixel(lastCursorX * (STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10) + i,
+			(lastCursorY + 1) * (STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10) - 1, 0xa, FALSE);
+	}
+	for(size_t i = 1 * fontScale / 10; i < (STDIO64_GRAPHICS_CHAR_WIDTH - 1) * fontScale / 10; i++){
+		stdio64_def_writeVGAPixel(cursorX * (STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10) + i,
+			(cursorY + 1) * (STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10) - 1, 0xa, TRUE);
+	}
+	lastCursorX = cursorX;
+	lastCursorY = cursorY;
 }
 
 void stdio64_def_updateCursorMemData(){
@@ -727,7 +751,38 @@ void stdio64_def_updateCursorMemData(){
 	cursorY = 0;
 }
 
+void stdio64_def_updateLoadingWheel_write_pixel(size_t num, size_t brightness){
+	size_t pixelOff = 0;
+	size_t xOff = 0;
+	size_t yOff = 0;
+	if(num < 5){
+		xOff = num;
+	}else if(num < 11){
+		xOff = 4;
+		yOff = num - 4;
+	}else if(num < 15){
+		xOff = 14 - num;
+		yOff = 6;
+	}else if(num < 20){
+		yOff = 20 - num;
+	}
+	xOff = (xOff + 1) * fontScale / 10;
+	yOff = (yOff) * fontScale / 10;
+	size_t hbrightness = brightness / 2;
+	stdio64_def_writeVGAPixelCol(xOff + cursorX * (STDIO64_GRAPHICS_CHAR_WIDTH * fontScale / 10),
+		yOff + cursorY * (STDIO64_GRAPHICS_CHAR_HEIGHT * fontScale / 10), hbrightness | (brightness << 8) | (hbrightness << 16));
+}
+
 void stdio64_def_updateLoadingWheel(){
+	size_t brightness = 255;
+	for(size_t i = loadingWheelPos; i < 20 + loadingWheelPos; i++){
+		stdio64_def_updateLoadingWheel_write_pixel(20 - i % 20, brightness);
+		brightness -= 12;
+	}
+	if(loadingWheelPos >= 3)
+		loadingWheelPos -= 3;
+	else
+		loadingWheelPos = 19;
 }
 
 

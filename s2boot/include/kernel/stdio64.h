@@ -78,7 +78,8 @@ void reprintText();
 
 void stdio64_def_delChar();
 void stdio64_def_printCharAt(char ch, uint8_t attr, size_t x, size_t y);
-void stdio64_def_writeVGAPixel(uint8_t* addr, uint8_t attr, bool set);
+void stdio64_def_writeVGAPixel(size_t x, size_t y, uint8_t attr, bool set);
+void stdio64_def_writeVGAPixelCol(size_t x, size_t y, size_t color);
 void stdio64_def_shiftUp();
 void stdio64_def_shiftDown();
 void stdio64_def_clearScreen(uint8_t attr);

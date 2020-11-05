@@ -689,7 +689,9 @@ void m_show_menu(){
 	if(m_state != KERNEL_STATE_RUN)
 		return;
 	clearScreen(0x7);
-	setCursorPosition(0, 24);
+	size_t rows;
+	stdio64_get_text_size(&rows, NULL);
+	setCursorPosition(0, rows - 1);
 	m_state = KERNEL_STATE_MENU;
 	m_menu_counter = parse_get_data()->timeout;
 	m_print_title("Select operating system");
