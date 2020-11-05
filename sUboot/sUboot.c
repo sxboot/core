@@ -19,7 +19,7 @@
 #include <arch.h>
 
 
-static char* suboot_version = "1.1";
+static char* suboot_version = "1.2";
 
 
 static char* firmwareDriverName = "uefi";

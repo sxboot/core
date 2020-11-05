@@ -38,7 +38,7 @@
 #include "kernel.h"
 
 
-#define VERSION_MAJOR 9
+#define VERSION_MAJOR 10
 #define VERSION_MINOR 0
 
 
