@@ -90,6 +90,7 @@ void* stdlib_smab_alloc(size_t size){
 	smalloc_block* block = smalloc_list;
 	smalloc_block* lastBlock = NULL;
 	while(block){
+		kernel_runtime_assertion(block->magic == SMALLOC_BLOCK_MAGIC, "Block in SMAB list is not a SMAB block");
 		lastBlock = block;
 		if(block->allocation != 0xffffffffffffffff){
 			void* addr = NULL;

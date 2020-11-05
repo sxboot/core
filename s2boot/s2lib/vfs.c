@@ -236,15 +236,26 @@ bool vfs_fat16_isFilesystem(char* driveLabel, uint64_t partStart){
 
 status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, size_t dest){
 	vfs_fat_dir_entry* result = 0;
+	void* destTmp = NULL;
 	status_t status = vfs_fat16_getFile(driveLabel, partStart, path, &result);
 	CERROR();
 	uint16_t cluster = result->clusterLow;
 	vfs_fat16_bpb* bpb = (vfs_fat16_bpb*) (vfs_get_data_temp() + 4096); // bpb was read to this location by vfs_fat16_getFile
 	updateLoadingWheel();
 	if(cluster < 2){ // cluster == 0: file exists but is empty
-		memset((void*) dest, 0, bpb->bytesPerSector * bpb->sectorsPerCluster);
 		goto _end;
 	}
+
+	// use temporary buffer because caller buffer is likely smaller than the size of the memory area the file will be read to (can only read in blocks of size clusterSize)
+	size_t fileSize = result->size;
+	size_t destTmpSize = result->size;
+	size_t clusterSize = bpb->sectorsPerCluster * bpb->bytesPerSector;
+	if(destTmpSize % clusterSize != 0)
+		destTmpSize += clusterSize - destTmpSize % clusterSize;
+	destTmp = kmalloc_aligned(destTmpSize);
+	if(!destTmp)
+		FERROR(TSX_OUT_OF_MEMORY);
+
 	size_t dirLBA = VFS_FAT16_DATASTART + (cluster - 2) * bpb->sectorsPerCluster;
 	size_t read = 0;
 	size_t lastFATSectorOffset = -1;
@@ -252,7 +263,7 @@ status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, si
 	while(cluster >= 0x0002 && cluster <= 0xffef){
 		updateLoadingWheel();
 		status = msio_read_drive(driveLabel, VFS_FAT16_DATASTART + (cluster - 2) * bpb->sectorsPerCluster, bpb->sectorsPerCluster,
-			dest + bpb->bytesPerSector * bpb->sectorsPerCluster * read);
+			(size_t) destTmp + bpb->bytesPerSector * bpb->sectorsPerCluster * read);
 		CERROR();
 		size_t FATSectorOffset = cluster * 2 / bpb->bytesPerSector;
 		if(lastFATSectorOffset != FATSectorOffset){
@@ -263,7 +274,10 @@ status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, si
 		cluster = fat[cluster % (bpb->bytesPerSector / 2)];
 		read++;
 	}
+	memcpy((void*) dest, destTmp, fileSize);
 	_end:
+	if(destTmp)
+		kfree_aligned(destTmp, destTmpSize);
 	return status;
 }
 
