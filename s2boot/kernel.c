@@ -35,6 +35,8 @@
 #include <kernel/list.h>
 #include <kernel/serial.h>
 #include <kernel/cli.h>
+#include <kernel/btypes.h>
+#include <kernel/modules.h>
 #include "kernel.h"
 
 
@@ -69,7 +71,6 @@ static char* s3bootFilePath = NULL;
 
 static list_array* m_elf_images = NULL;
 static int m_elf_image_kernel_index;
-static int m_elf_image_bdd_index;
 
 
 static list_array* m_boot_handlers = NULL;
@@ -170,7 +171,7 @@ status_t m_init(){
 		FERROR(TSX_OUT_OF_MEMORY);
 	reloc_ptr((void**) &m_elf_images);
 	// copy all additional required data from elf file so we dont need to have the entire file in memory
-	m_elf_image_kernel_index = m_add_elf_image(s2bootImage, s1data->s2bootBase);
+	m_elf_image_kernel_index = kernel_add_elf_image(s2bootImage, s1data->s2bootBase);
 	if(m_elf_image_kernel_index < 0)
 		FERROR(TSX_OUT_OF_MEMORY);
 
@@ -267,8 +268,13 @@ status_t m_init(){
 	status = m_load_additional_drivers();
 	CERROR();
 
-	status = m_set_boot_handlers();
+	m_boot_handlers = list_array_create(0);
+	if(m_boot_handlers == NULL)
+		return TSX_OUT_OF_MEMORY;
+	reloc_ptr((void**) &m_boot_handlers);
+	status = btypes_init();
 	CERROR();
+
 	status = m_upstream_callback(2, 0, 0, 0);
 	CERROR();
 
@@ -325,124 +331,13 @@ status_t m_firmware_devinfo(uint8_t number, uint64_t* sectors, size_t* sectorSiz
 	return status;
 }
 
-status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrite){
-	status_t status = 0;
-	void* address = 0;
-	size_t size = 0;
-	if(!elf_is_elf(file))
-		FERROR(TSX_INVALID_FORMAT);
-	size = elf_get_required_memory(file);
-	if(size >= MMGR_USABLE_MEMORY)
-		FERROR(TSX_TOO_LARGE);
-	if(size == 0)
-		FERROR(TSX_INVALID_FORMAT);
-	address = kmalloc(size);
-	if(!address)
-		FERROR(TSX_OUT_OF_MEMORY);
-
-	int listIndex = m_add_elf_image(file, (size_t) address);
-	if(listIndex < 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	if(listIndexWrite)
-		*listIndexWrite = listIndex;
-
-	status = dynl_load_and_link_to_static_elf(file, (size_t) address, m_elf_images->base[m_elf_image_kernel_index] /* link against s2boot (kernel) */);
-	CERROR();
-	elf_symtab* initsymtab = elf_get_symtab_entry(file, "msio_init"); // optional
-	elf_symtab* infosymtab = elf_get_symtab_entry(file, "msio_get_device_info");
-	if(infosymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	elf_symtab* readsymtab = elf_get_symtab_entry(file, "msio_read");
-	if(readsymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	elf_symtab* writesymtab = elf_get_symtab_entry(file, "msio_write");
-	if(writesymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	elf_symtab* typesymtab = elf_get_symtab_entry(file, "msio_get_driver_type");
-	if(typesymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	char* type = ((char* (*) ())(typesymtab->st_value + address))();
-	if(typeWrite)
-		*typeWrite = type;
-	if(initsymtab){
-		status = ((status_t (*) ())(initsymtab->st_value + address))();
-		CERROR();
-	}
-	status = msio_attach_driver(type,
-		(MSIO_DRIVER_INFO)(infosymtab->st_value + address),
-		(MSIO_DRIVER_READ)(readsymtab->st_value + address),
-		(MSIO_DRIVER_WRITE)(writesymtab->st_value + address));
-	CERROR();
-	_end:
-	if(status != TSX_SUCCESS && address && size)
-		kfree(address, size);
-	return status;
-}
-
-status_t m_init_fs_driver(elf_file* file, int* listIndexWrite){
-	status_t status = 0;
-	void* address = 0;
-	size_t size = 0;
-	if(!elf_is_elf(file))
-		FERROR(TSX_INVALID_FORMAT);
-	size = elf_get_required_memory(file);
-	if(size >= MMGR_USABLE_MEMORY)
-		FERROR(TSX_TOO_LARGE);
-	if(size == 0)
-		FERROR(TSX_INVALID_FORMAT);
-	address = kmalloc(size);
-	if(!address)
-		FERROR(TSX_OUT_OF_MEMORY);
-
-	int listIndex = m_add_elf_image(file, (size_t) address);
-	if(listIndex < 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	if(listIndexWrite)
-		*listIndexWrite = listIndex;
-
-	status = dynl_load_and_link_to_static_elf(file, (size_t) address, m_elf_images->base[m_elf_image_kernel_index] /* link against s2boot (kernel) */);
-	CERROR();
-	elf_symtab* initsymtab = elf_get_symtab_entry(file, "vfs_init"); // optional
-	elf_symtab* isFssymtab = elf_get_symtab_entry(file, "vfs_isFilesystem");
-	if(isFssymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	elf_symtab* readFilesymtab = elf_get_symtab_entry(file, "vfs_readFile");
-	if(readFilesymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	elf_symtab* fileSizesymtab = elf_get_symtab_entry(file, "vfs_getFileSize");
-	if(fileSizesymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	elf_symtab* listDirsymtab = elf_get_symtab_entry(file, "vfs_listDir");
-	if(listDirsymtab == 0)
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	if(initsymtab){
-		status = ((status_t (*) ())(initsymtab->st_value + address))();
-		CERROR();
-	}
-	status = vfs_attach_driver(
-		(VFS_DRIVER_IS_FILESYSTEM)(isFssymtab->st_value + address),
-		(VFS_DRIVER_READ_FILE)(readFilesymtab->st_value + address),
-		(VFS_DRIVER_GET_FILE_SIZE)(fileSizesymtab->st_value + address),
-		(VFS_DRIVER_LIST_DIR)(listDirsymtab->st_value + address));
-	CERROR();
-	_end:
-	if(status != TSX_SUCCESS && address && size)
-		kfree(address, size);
-	return status;
-}
-
 status_t m_link_bdd(){
-	log_debug("Linking bdd ", 0x7);
+	log_debug("Linking bdd (%Y)\n", s1data->bddAddress);
 	status_t status = 0;
-	updateLoadingWheel();
 	elf_file* file = (elf_file*) (s1data->bddAddress);
-	int listIndex;
 	char* type;
-	status = m_init_disk_driver(file, &m_elf_image_bdd_index, &type);
-	printf("type=%s ", type);
+	status = modules_init_disk_driver(file, &type);
 	memcpy((void*) bootDriveType, (void*) type, 4);
-	updateLoadingWheel();
-	printNln();
 	_end:
 	return status;
 }
@@ -497,31 +392,11 @@ status_t m_load_config(){
 	return status;
 }
 
-status_t m_load_additional_drivers__load_single_(elf_file* file, int type){
-	status_t status = 0;
-	if(type == 1){
-		int listIndex;
-		char* type;
-		status = m_init_disk_driver(file, &listIndex, &type);
-		CERROR();
-		log_debug("Loaded disk driver for '%s' at %Y\n", type, ((elf_loaded_image*) m_elf_images->base[listIndex])->loadLocation);
-	}else if(type == 2){
-		int listIndex;
-		status = m_init_fs_driver(file, &listIndex);
-		CERROR();
-		log_debug("Loaded filesystem driver at %Y\n", ((elf_loaded_image*) m_elf_images->base[listIndex])->loadLocation);
-	}else{
-		FERROR(TSX_INVALID_TYPE);
-	}
-	_end:
-	return status;
-}
-
 status_t m_load_additional_drivers(){
 	status_t status = 0;
 	parse_data_t* parseData = parse_get_data();
 
-	int cuType = 1;
+	int cuType = MODULES_TYPE_DISK_DRIVER;
 	char* driverPath = kernel_write_boot_file(parseData->hdDriverOverride ? parseData->hdDriverOverride : "/[BDRIVE]/lib/disk/");
 	loadDrivers:{
 		size_t driverPathLen = strlen(driverPath);
@@ -535,22 +410,14 @@ status_t m_load_additional_drivers(){
 			if(!filePath)
 				FERROR(TSX_OUT_OF_MEMORY);
 			sprintf(filePath, "%s%s", driverPath, files->base[i]); // absolute path
-			size_t fileAddr = 0, fileSize = 0;
-			status = kernel_read_file(filePath, &fileAddr, &fileSize);
-			if(status != TSX_SUCCESS)
-				goto loadDrivers_l_end;
 
-			status = m_load_additional_drivers__load_single_((elf_file*) fileAddr, cuType);
-
-			loadDrivers_l_end:
+			status = modules_load_module_from_file(filePath, cuType);
 			if(status != TSX_SUCCESS){
 				log_warn("Loading driver '%s' failed: %u (%s)\n", files->base[i], (size_t) status, errcode_get_name(status));
 				kernel_print_error_trace();
 				status = 0;
 			}
 
-			if(fileAddr)
-				kfree((void*) fileAddr, fileSize);
 			kfree(files->base[i], strlen(files->base[i])); // free file name string in list
 		}
 		list_array_delete(files);
@@ -561,45 +428,13 @@ status_t m_load_additional_drivers(){
 			status = 0;
 		}
 	}
-	if(cuType == 1){
-		cuType = 2;
+	if(cuType == MODULES_TYPE_DISK_DRIVER){
+		cuType = MODULES_TYPE_FS_DRIVER;
 		driverPath = kernel_write_boot_file(parseData->fsDriverOverride ? parseData->fsDriverOverride : "/[BDRIVE]/lib/fs/");
 		goto loadDrivers;
 	}
 	_end:
 	return status;
-}
-
-status_t m_set_boot_handlers(){
-	m_boot_handlers = list_array_create(0);
-	if(m_boot_handlers == NULL)
-		return TSX_OUT_OF_MEMORY;
-	reloc_ptr((void**) &m_boot_handlers);
-	m_add_boot_handler("chain", m_boot_chain);
-	m_add_boot_handler("mbr", m_boot_mbr);
-	m_add_boot_handler("binary", m_boot_binary);
-	m_add_boot_handler("image", m_boot_image);
-	return 0;
-}
-
-void m_add_boot_handler(char* type, status_t (*start)(parse_entry* entry)){
-	kboot_handler* handler = kmalloc(sizeof(kboot_handler));
-	if(!handler)
-		return;
-	handler->type = type;
-	handler->start = start;
-	reloc_ptr((void**) &handler->type);
-	reloc_ptr((void**) &handler->start);
-	list_array_push(m_boot_handlers, handler);
-}
-
-int m_add_elf_image(elf_file* file, size_t loadLocation){
-	elf_loaded_image* image = kmalloc(sizeof(elf_loaded_image));
-	if(!image)
-		return -1;
-	elf_gen_loaded_image_data(file, loadLocation, image);
-	list_array_push(m_elf_images, image);
-	return m_elf_images->length - 1;
 }
 
 status_t m_init_reloc_stack(){
@@ -809,45 +644,19 @@ status_t m_start(){
 
 status_t m_load_external_boot_handler(char* type){
 	status_t status = 0;
+	size_t fileAddr = 0, fileSize = 0;
 	char* bhFilePath = kmalloc(MMGR_BLOCK_SIZE);
-	elf_file* bh = NULL;
-	void* loadLocation = NULL;
 	if(bhFilePath == NULL)
 		FERROR(TSX_OUT_OF_MEMORY);
 	snprintf(bhFilePath, MMGR_BLOCK_SIZE, "/%s%u.%u/lib/boot/%s.ko", bootDriveType, bootDriveNum, s1data->bootPartN, type);
-	size_t raddr = 0;
-	size_t fileSize = 0;
-	status = kernel_read_file(bhFilePath, &raddr, &fileSize);
+	status = kernel_read_file(bhFilePath, &fileAddr, &fileSize);
 	kfree(bhFilePath, MMGR_BLOCK_SIZE);
 	CERROR();
-	bh = (elf_file*) raddr;
-	if(!(elf_is_elf(bh) && bh->ei_class == ELF_CLASS_nBIT)){
-		FERROR(TSX_INVALID_FORMAT);
-	}
-	size_t memBase = elf_get_memory_base(bh);
-	size_t totalSize = elf_get_required_memory(bh);
-	if(totalSize == 0 || memBase == SIZE_MAX){
-		FERROR(TSX_PARSE_ERROR);
-	}
-	loadLocation = kmalloc(totalSize);
-	if(loadLocation == NULL){
-		FERROR(TSX_OUT_OF_MEMORY);
-	}
-	status = dynl_load_and_link_to_static_elf(bh, (size_t) loadLocation, m_elf_images->base[m_elf_image_kernel_index]);
+	status = modules_init_boot_handler((elf_file*) fileAddr, type);
 	CERROR();
-	elf_symtab* startsymtab = elf_get_symtab_entry(bh, "kboot_start");
-	if(startsymtab == NULL){
-		FERROR(TSX_UNDEFINED_REFERENCE);
-	}
-	m_add_elf_image(bh, (size_t) loadLocation);
-	kfree(bh, fileSize);
-	bh = NULL;
-	size_t entryAddress = startsymtab->st_value - memBase + (size_t) loadLocation;
-	m_add_boot_handler(type, (status_t (*) (parse_entry* entry)) (entryAddress));
-	status = 0;
 	_end:
-	if(bh)
-		kfree(bh, fileSize);
+	if(fileAddr)
+		kfree((void*) fileAddr, fileSize);
 	return status;
 }
 
@@ -930,178 +739,6 @@ void m_start_reserve_s3boot_map_mem_region(uint32_t base, uint32_t length){
 			break;
 		}
 	}
-}
-
-
-// internal boot handlers (using s3boot)
-
-status_t m_boot_chain(parse_entry* entry){
-	status_t status = m_load_s3boot();
-	CERROR();
-	char driveLabel[8];
-	memset((void*) driveLabel, 0, 8);
-	char* pdrive = parse_get_option(entry, "drive");
-	char* ppartition = parse_get_option(entry, "partition");
-	if(!ppartition)
-		FERROR(TSX_MISSING_ARGUMENTS);
-	size_t ppartitionNum = util_str_to_int(ppartition);
-	if(pdrive == 0){
-		snprintf(driveLabel, 8, "%s%u", bootDriveType, bootDriveNum);
-	}else{
-		if(strlen(pdrive) > 7){
-			log_fatal("Drive label for selected entry too large", 0xc);
-			FERROR(TSX_ERROR);
-		}
-		snprintf(driveLabel, 8, "%s", pdrive);
-	}
-	uint64_t partStart;
-	status = vfs_get_partition_lba(driveLabel, ppartitionNum, &partStart);
-	CERROR();
-	log_debug("Partition %u on drive %s starting at 0x%X\n", ppartitionNum, driveLabel, partStart);
-	status = msio_read_drive(driveLabel, partStart, 1, ARCH_DEFAULT_MBR_LOCATION);
-	CERROR();
-	arch_os_entry_state entryState;
-	memset(&entryState, 0, sizeof(arch_os_entry_state));
-#ifdef ARCH_UPSTREAM_x86
-	entryState.d = s1data->bootDrive;
-#endif
-	kernel_jump(&entryState, ARCH_DEFAULT_MBR_LOCATION, KERNEL_S3BOOT_BMODE_16, 0);
-	_end:
-	return status;
-}
-
-status_t m_boot_mbr(parse_entry* entry){
-	status_t status = 0;
-	char* pfile = parse_get_option(entry, "file");
-	if(!(pfile != NULL)){
-		FERROR(TSX_MISSING_ARGUMENTS);
-	}
-	status = m_load_s3boot();
-	CERROR();
-	if(strlen(pfile) > 500)
-		FERROR(TSX_TOO_LARGE);
-	char* filePath = kernel_write_boot_file(pfile);
-	if(filePath == 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	log_debug("Loading image file %s\n", filePath);
-	size_t fileSize = 0;
-	status = vfs_get_file_size(filePath, &fileSize);
-	CERROR();
-	if(fileSize > 512){
-		FERROR(TSX_TOO_LARGE);
-	}
-	status = kernel_read_file_s(filePath, ARCH_DEFAULT_MBR_LOCATION);
-	CERROR();
-	kfree(filePath, strlen(filePath) + 1);
-	arch_os_entry_state entryState;
-	memset(&entryState, 0, sizeof(arch_os_entry_state));
-#ifdef ARCH_UPSTREAM_x86
-	entryState.d = s1data->bootDrive;
-#endif
-	kernel_jump(&entryState, ARCH_DEFAULT_MBR_LOCATION, KERNEL_S3BOOT_BMODE_16, 0);
-	_end:
-	return status;
-}
-
-status_t m_boot_binary(parse_entry* entry){
-	status_t status = 0;
-	char* pfile = parse_get_option(entry, "file");
-	char* pdestination = parse_get_option(entry, "destination");
-	char* poffset = parse_get_option(entry, "offset");
-	char* pbits = parse_get_option(entry, "bits");
-	if(!(pfile != NULL && pdestination != 0 && pbits != 0)){
-		FERROR(TSX_MISSING_ARGUMENTS);
-	}
-	size_t pdestinationNum = util_str_to_hex(pdestination);
-	size_t poffsetNum = 0;
-	if(poffset)
-		poffsetNum = util_str_to_hex(poffset);
-	size_t pbitsNum = util_str_to_int(pbits);
-	if(!(pbitsNum == 16 || pbitsNum == 32 || pbitsNum == 64)){
-		log_error("Bits must be 16, 32 or 64\n");
-		FERROR(TSX_INVALID_TYPE);
-	}
-	status = m_load_s3boot();
-	CERROR();
-	if(strlen(pfile) > 500)
-		FERROR(TSX_TOO_LARGE);
-	char* filePath = kernel_write_boot_file(pfile);
-	if(filePath == 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	log_debug("Loading image file %s\n", filePath);
-	size_t size = 0;
-	status = vfs_get_file_size(filePath, &size);
-	CERROR();
-	mmgr_reserve_mem_region(pdestinationNum, size, MMGR_MEMTYPE_OS);
-	size_t tempLocation = (size_t) vmmgr_alloc_block_sequential(size);
-	if(tempLocation == 0){
-		FERROR(TSX_OUT_OF_MEMORY);
-	}
-	status = kernel_read_file_s(filePath, tempLocation);
-	CERROR();
-	kfree(filePath, strlen(filePath) + 1);
-	s3data.bMode = pbitsNum == 16 ? KERNEL_S3BOOT_BMODE_16 : (pbitsNum == 32 ? KERNEL_S3BOOT_BMODE_32 : KERNEL_S3BOOT_BMODE_64);
-	s3data.jmp = pdestinationNum + poffsetNum;
-	s3data.entryStateStruct = 0;
-	m_start_reserve_s3boot_map_mem_region(vmmgr_get_physical(tempLocation), size);
-	m_start_add_s3boot_map_entry(pdestinationNum, size, vmmgr_get_physical(tempLocation));
-	status = m_s3boot();
-	CERROR();
-	_end:
-	return status;
-}
-
-status_t m_boot_image(parse_entry* entry){
-	status_t status = 0;
-	char* pfile = parse_get_option(entry, "file");
-	if(!(pfile != NULL)){
-		FERROR(TSX_MISSING_ARGUMENTS);
-	}
-	status = m_load_s3boot();
-	CERROR();
-	if(strlen(pfile) > 500)
-		FERROR(TSX_TOO_LARGE);
-	char* filePath = kernel_write_boot_file(pfile);
-	if(filePath == 0)
-		FERROR(TSX_OUT_OF_MEMORY);
-	size_t size = 0;
-	size_t tempLocation = 0;
-	status = kernel_read_file(filePath, &tempLocation, &size);
-	CERROR();
-	kfree(filePath, strlen(filePath) + 1);
-	if(elf32_is_elf((elf32_file*) tempLocation)){
-		elf32_file* file = (elf32_file*) tempLocation;
-		if(file->ei_class == ELF_CLASS_32BIT){
-			s3data.bMode = KERNEL_S3BOOT_BMODE_32;
-		}/*else if(file->ei_class == ELF_CLASS_64BIT){ // 64bit is not supported
-			s3data.bMode = KERNEL_S3BOOT_BMODE_64;
-		}*/else{
-			log_error("Unsupported/unknown ELF class %u\n", file->ei_class);
-			FERROR(TSX_INVALID_FORMAT);
-		}
-		size_t totalSize = elf32_get_required_memory(file);
-		size_t memBase = elf32_get_memory_base(file);
-		if(totalSize == 0 || memBase == SIZE_MAX){
-			FERROR(TSX_PARSE_ERROR);
-		}
-		vmmgr_map_pages_req(memBase + totalSize);
-		mmgr_reserve_mem_region(memBase, totalSize, MMGR_MEMTYPE_OS);
-		void* loadLocation = kmalloc(totalSize);
-		if(loadLocation == 0){
-			FERROR(TSX_OUT_OF_MEMORY);
-		}
-		log_debug("ELF load location: 0x%X (%u bytes) -> 0x%X\n", (size_t) loadLocation, totalSize, (size_t) file->e_entry);
-		status = elf32_load_library(file, (size_t) loadLocation);
-		s3data.jmp = file->e_entry;
-		m_start_add_s3boot_map_entry(memBase, totalSize, vmmgr_get_physical((size_t) loadLocation));
-	}else{
-		FERROR(TSX_INVALID_FORMAT);
-	}
-	s3data.entryStateStruct = 0;
-	status = m_s3boot();
-	CERROR();
-	_end:
-	return status;
 }
 
 
@@ -1227,6 +864,10 @@ char* kernel_get_boot_label(){
 	return bootPartLabel;
 }
 
+char* kernel_get_boot_drive_label(){
+	return bootDriveLabel;
+}
+
 char* kernel_get_boot_drive_type(){
 	return bootDriveType;
 }
@@ -1274,6 +915,10 @@ void kernel_stop_autoboot(){
 
 bool kernel_is_console_running(){
 	return m_state == KERNEL_STATE_CONSOLE;
+}
+
+elf_loaded_image* kernel_get_image_handle(){
+	return m_elf_images->base[m_elf_image_kernel_index];
 }
 
 
@@ -1763,6 +1408,27 @@ void kernel_jump(arch_os_entry_state* entryState, size_t dest, size_t mode, uint
 		status = m_s3boot();
 	log_fatal("s3boot call failed: %u (%s)\n", status, errcode_get_name(status));
 	kernel_halt();
+}
+
+
+void kernel_add_boot_handler(char* type, void* start){
+	kboot_handler* handler = kmalloc(sizeof(kboot_handler));
+	if(!handler)
+		return;
+	handler->type = type;
+	handler->start = start;
+	reloc_ptr((void**) &handler->type);
+	reloc_ptr((void**) &handler->start);
+	list_array_push(m_boot_handlers, handler);
+}
+
+int kernel_add_elf_image(elf_file* file, size_t loadLocation){
+	elf_loaded_image* image = kmalloc(sizeof(elf_loaded_image));
+	if(!image)
+		return -1;
+	elf_gen_loaded_image_data(file, loadLocation, image);
+	list_array_push(m_elf_images, image);
+	return m_elf_images->length - 1;
 }
 
 

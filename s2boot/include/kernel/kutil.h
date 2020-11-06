@@ -34,6 +34,7 @@ typedef struct kernel_error_frame{
 
 s1boot_data* kernel_get_s1data();
 char* kernel_get_boot_label();
+char* kernel_get_boot_drive_label();
 char* kernel_get_boot_drive_type();
 void kernel_get_stack_meta(size_t* stackLocation, size_t* stackSize);
 void kernel_get_brand(char** name, char** versionstr, char** version);
@@ -42,6 +43,7 @@ size_t kernel_get_reloc_ptr_count();
 status_t kernel_add_event(void (*func), size_t arg);
 void kernel_stop_autoboot();
 bool kernel_is_console_running();
+elf_loaded_image* kernel_get_image_handle();
 
 status_t kernel_read_file_s(char* path, size_t dest);
 status_t kernel_read_file(char* path, size_t* destWrite, size_t* sizeWrite);
@@ -82,5 +84,8 @@ status_t kernel_exit_uefi();
 void kernel_s3boot_add_mem_region(uint32_t base, uint32_t length, uint32_t source);
 void kernel_s3boot_reserve_mem_region(uint32_t base, uint32_t length);
 void kernel_jump(arch_os_entry_state* entryState, size_t dest, size_t mode, uint32_t archFlags);
+
+void kernel_add_boot_handler(char* type, void* start);
+int kernel_add_elf_image(elf_file* file, size_t loadLocation);
 
 #endif /* __KERNEL_KUTIL_H__ */

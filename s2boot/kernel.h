@@ -75,15 +75,10 @@ status_t m_init();
 status_t m_attach_firmware_disk_driver(char** firmwareDriveTypeWrite);
 status_t m_firmware_read(uint8_t number, uint64_t sector, uint16_t sectorCount, size_t dest);
 status_t m_firmware_devinfo(uint8_t number, uint64_t* sectors, size_t* sectorSize);
-status_t m_init_disk_driver(elf_file* file, int* listIndexWrite, char** typeWrite);
-status_t m_init_fs_driver(elf_file* file, int* listIndexWrite);
 status_t m_link_bdd();
 status_t m_find_boot_drive();
 status_t m_load_config();
 status_t m_load_additional_drivers();
-status_t m_set_boot_handlers();
-void m_add_boot_handler(char* type, status_t (*start)(parse_entry* entry));
-int m_add_elf_image(elf_file* file, size_t loadLocation);
 status_t m_init_reloc_stack();
 
 
