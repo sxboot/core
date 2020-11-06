@@ -17,7 +17,17 @@
 						"On FreeBSD, LLVM comes pre-installed. To install the additional programs, run:$n$n",
 						"$t$Cpkg update$$$n",
 						"$t$Cpkg install nasm gmake git$$$n$n",
-						"$bNote: $$Because GNU make will be installed as $Cgmake$$, you will need to use the $Cgmake$$ command instead of $Cmake$$ in the next steps."
+						"$bNote: $$Because GNU make will be installed as $Cgmake$$, you will need to use the $Cgmake$$ command instead of $Cmake$$ in the next steps.$n",
+						"$bNote: $$You will not be able to build $isUboot$$ unless you install $Clld-link$$, which is not included in the base system."
+					]
+				},
+				{
+					"title": "Preparation on Debian",
+					"content": [
+						"Install all required packages:$n$n",
+						"$t$Capt-get update$$$n",
+						"$t$Capt-get install -y clang lld make nasm$$$n$n",
+						"$bNote: $$To install newer versions of LLVM, see $a[https://apt.llvm.org/]apt.llvm.org$$."
 					]
 				}
 			]
@@ -26,7 +36,7 @@
 			"title": "Build Steps",
 			"content": [
 				"Download the source code:$n$n",
-				"$t$Cgit clone https://git.omegazero.org/sxboot/core.git$$$n",
+				"$t$Cgit --recurse-submodules clone https://git.omegazero.org/sxboot/core.git$$$n",
 				"$t$Ccd core$$$n$n",
 				"Create the target directory and compile everything using default settings:$n$n",
 				"$t$Cmake world$$$n$n",
