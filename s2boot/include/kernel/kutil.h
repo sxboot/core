@@ -41,7 +41,6 @@ void kernel_get_brand(char** name, char** versionstr, char** version);
 void kernel_get_current_reloc(size_t* oldAddr, size_t* newAddr);
 size_t kernel_get_reloc_ptr_count();
 status_t kernel_add_event(void (*func), size_t arg);
-void kernel_stop_autoboot();
 bool kernel_is_console_running();
 elf_loaded_image* kernel_get_image_handle();
 

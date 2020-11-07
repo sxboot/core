@@ -37,6 +37,7 @@
 #include <kernel/cli.h>
 #include <kernel/btypes.h>
 #include <kernel/modules.h>
+#include <kernel/menu.h>
 #include "kernel.h"
 
 
@@ -52,10 +53,6 @@ static char* m_version = "TSXBoot v4." STRINGOF(VERSION_MAJOR) "." STRINGOF(VERS
 static char* m_version_r = "4." STRINGOF(VERSION_MAJOR) "." STRINGOF(VERSION_MINOR);
 
 static uint8_t m_state = 0;
-
-static uint8_t m_menu_selected = 0;
-static bool m_menu_autoboot = TRUE;
-static size_t m_menu_counter = 0;
 
 
 static char bootDriveType[5];
@@ -463,25 +460,19 @@ status_t m_select(){
 		if(m_state == KERNEL_STATE_MENU){
 			uint16_t key = arch_sleep_kb(1000);
 			if(key != 0){
-				m_menu_autoboot = FALSE;
-				if(key == KEY_ENTER){
-					break;
-				}else if(key == KEY_P_8){
-					if(m_menu_selected > 0)
-						m_menu_selected--;
-				}else if(key == KEY_P_2){
-					if(m_menu_selected < PARSE_MAX_ENTRIES && parse_get_data()->entries[m_menu_selected + 1].name != 0)
-						m_menu_selected++;
-				}else if(key == KEY_C){
+				uint8_t menuAction = menu_key(key);
+				if(menuAction == 1){
 					m_reset_state();
 					m_start_console();
+				}else if(menuAction == 2){
+					break;
 				}
 			}
-			if(m_menu_counter > 0 && m_menu_autoboot)
-				m_menu_counter--;
-			if(m_menu_counter == 0 && m_menu_autoboot)
-				break;
-			m_menu_paint();
+			if(m_state == KERNEL_STATE_MENU){
+				if(menu_boot())
+					break;
+				menu_paint();
+			}
 			m_poll_events();
 		}else if(m_state == KERNEL_STATE_CONSOLE){
 			arch_sleep(10);
@@ -509,28 +500,12 @@ void m_reset_state(){
 
 // STATE = 1
 
-void m_print_title(char* s){
-	size_t cols, rows;
-	stdio64_get_text_size(&rows, &cols);
-	for(int i = 0; i < cols; i++)
-		printCharAt(0x20, 0x70, i, 0);
-	printAt(m_title, 0x70, 0, 0);
-	printAt(" - ", 0x70, strlen(m_title), 0);
-	printAt(s, 0x70, strlen(m_title) + 3, 0);
-	printAt(m_version, 0x70, cols - strlen(m_version), 0);
-}
-
 void m_show_menu(){
 	if(m_state != KERNEL_STATE_RUN)
 		return;
 	clearScreen(0x7);
-	size_t rows;
-	stdio64_get_text_size(&rows, NULL);
-	setCursorPosition(0, rows - 1);
 	m_state = KERNEL_STATE_MENU;
-	m_menu_counter = parse_get_data()->timeout;
-	m_print_title("Select operating system");
-	m_menu_paint();
+	menu_show();
 }
 
 void m_close_menu(){
@@ -539,35 +514,6 @@ void m_close_menu(){
 	m_state = KERNEL_STATE_RUN;
 	clearScreen(0x7);
 	reprintText();
-}
-
-void m_menu_paint(){
-	if(m_state != KERNEL_STATE_MENU)
-		return;
-	size_t cols, rows;
-	stdio64_get_text_size(&rows, &cols);
-	parse_data_t* parse_data = parse_get_data();
-	for(int i = 0; i < PARSE_MAX_ENTRIES; i++){
-		for(int j = 1; j < cols - 1; j++)
-			printCharAt(0x20, (m_menu_selected == i) ? 0x70 : 0x7, j, 2 + i);
-		if(parse_data->entries[i].name != 0){
-			printAt(parse_data->entries[i].name, (m_menu_selected == i) ? 0x70 : 0x7, 1, 2 + i);
-		}
-	}
-	printAt("Use arrow keys \x18\x19 to select", 0xf, 0, rows - 6);
-	printAt("Press ENTER to boot selected entry", 0xf, 0, rows - 5);
-	printAt("Press C to enter CLI", 0xf, 0, rows - 4);
-	for(int i = 0; i < cols; i++)
-		printCharAt(0x20, 0x7, i, rows - 2);
-	if(m_menu_autoboot){
-		printAt("Autoboot in ", 0x7, 0, rows - 2);
-		char* numstr = getDec(m_menu_counter);
-		printAt(numstr, 0x7, 12, rows - 2);
-		if(m_menu_counter == 1)
-			printAt(" second", 0x7, 12 + strlen(numstr), rows - 2);
-		else
-			printAt(" seconds", 0x7, 12 + strlen(numstr), rows - 2);
-	}
 }
 
 // STATE = 2
@@ -600,7 +546,7 @@ void cli_command_boot(uint8_t dest, char* args){
 		return;
 	}
 	m_reset_state();
-	m_menu_selected = num;
+	*menu_selected_ptr() = num;
 }
 
 
@@ -609,10 +555,10 @@ void cli_command_boot(uint8_t dest, char* args){
 // -----------------------------------------------------------
 
 status_t m_start(){
-	log_info("Selected entry: %s\n", parse_get_data()->entries[m_menu_selected].name);
-	status_t status = parse_file_entry(m_menu_selected);
+	log_info("Selected entry: %s\n", parse_get_data()->entries[*menu_selected_ptr()].name);
+	status_t status = parse_file_entry(*menu_selected_ptr());
 	CERROR();
-	parse_entry* entry = &(parse_get_data()->entries[m_menu_selected]);
+	parse_entry* entry = &(parse_get_data()->entries[*menu_selected_ptr()]);
 	bool extLoaded = FALSE;
 	kboot_handler* handler = 0;
 	loadHandler:
@@ -907,10 +853,6 @@ status_t kernel_add_event(void (*func), size_t arg){
 	event->arg = arg;
 	list_array_push(m_event_queue, event);
 	return TSX_SUCCESS;
-}
-
-void kernel_stop_autoboot(){
-	m_menu_autoboot = FALSE;
 }
 
 bool kernel_is_console_running(){

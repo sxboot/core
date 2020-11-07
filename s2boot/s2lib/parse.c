@@ -225,8 +225,14 @@ status_t parse_file_entry(uint8_t index){
 				*(addr + j) = 0;
 			while(*(addr + i) == ' ')
 				i++;
-			list_array_push(entry->optionsKeys, key);
-			list_array_push(entry->optionsValues, addr + i);
+			size_t keyLen = strlen(key) + 1;
+			char* keyCpy = kmalloc(keyLen);
+			memcpy(keyCpy, key, keyLen);
+			size_t valLen = strlen(addr + i) + 1;
+			char* valCpy = kmalloc(valLen);
+			memcpy(valCpy, addr + i, valLen);
+			list_array_push(entry->optionsKeys, keyCpy);
+			list_array_push(entry->optionsValues, valCpy);
 			i += util_str_length(addr + i);
 		}
 	}

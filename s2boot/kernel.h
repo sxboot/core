@@ -105,10 +105,8 @@ void m_save_vid_mem();
 void m_restore_vid_mem();
 void m_reset_state();
 
-void m_print_title(char* s);
 void m_show_menu();
 void m_close_menu();
-void m_menu_paint();
 
 void m_start_console();
 void m_close_console();

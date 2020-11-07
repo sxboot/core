@@ -26,6 +26,7 @@
 #include <kernel/list.h>
 #include <kernel/vfs.h>
 #include <kernel/util.h>
+#include <kernel/menu.h>
 #include <kernel/cli.h>
 
 
@@ -72,7 +73,7 @@ void cli_console_key(uint16_t c){
 }
 
 void cli_serial_key(uint8_t c){
-	kernel_stop_autoboot();
+	menu_stop_autoboot();
 	if(c == '\n' || c == '\r'){
 		serial_text[serial_text_length] = 0;
 		serial_write('\r');
