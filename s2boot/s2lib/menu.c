@@ -41,6 +41,8 @@ static char* menu_edit_text_key = NULL;
 static char* menu_edit_text_value = NULL;
 static bool menu_edit_editing_key = TRUE;
 
+static bool menu_used_args_short = FALSE;
+
 
 void menu_show(){
 	if(!menu_edit_text_key){
@@ -94,7 +96,7 @@ void menu_paint_main(size_t cols, size_t rows){
 		}
 	}
 	printAt("Use arrow keys \x18\x19 to select", 0xf, 0, rows - 6);
-	printAt("Press ENTER to boot or E to edit the selected entry", 0xf, 0, rows - 5);
+	printAt("Press ENTER to boot, E to edit options or A to edit args of the selected entry", 0xf, 0, rows - 5);
 	printAt("Press C to enter CLI", 0xf, 0, rows - 4);
 	for(int i = 0; i < cols; i++)
 		printCharAt(0x20, 0x7, i, rows - 2);
@@ -281,6 +283,32 @@ uint8_t menu_key(uint16_t key){
 			}
 			menu_edit_index = 0;
 			menu_switch_state(MENU_STATE_EDIT_OVERVIEW);
+		}else if(key == KEY_A){
+			status_t status = parse_file_entry(menu_selected);
+			if(status != TSX_SUCCESS){
+				menu_error_popup(status);
+				return 0;
+			}
+			parse_entry* entry = &parse_get_data()->entries[menu_selected];
+			menu_edit_index = 0;
+			for(size_t i = 0; i < entry->optionsKeys->length; i++){
+				if(strcmp((char*) entry->optionsKeys->base[i], "args") == 0){
+					menu_edit_index = i + 1;
+					break;
+				}
+			}
+			if(!menu_edit_index){ // menu_edit_index = 0 is always option 'type'; means 'args' was not found
+				char* nKey = kmalloc(5); // 5 = strlen("args") + 1
+				char* nVal = kmalloc(1);
+				memcpy(nKey, "args", 5);
+				nVal[0] = 0;
+				list_array_push(entry->optionsKeys, nKey);
+				list_array_push(entry->optionsValues, nVal);
+				menu_edit_index = entry->optionsKeys->length;
+			}
+			menu_used_args_short = TRUE;
+			menu_switch_state(MENU_STATE_EDIT_OPTION);
+			menu_edit_editing_key = FALSE;
 		}
 	}else if(menu_state == MENU_STATE_EDIT_OVERVIEW){
 		if(key == KEY_ESCAPE){
@@ -310,11 +338,15 @@ uint8_t menu_key(uint16_t key){
 			menu_switch_state(MENU_STATE_EDIT_OPTION);
 		}
 	}else if(menu_state == MENU_STATE_EDIT_OPTION){
-		if(key == KEY_ESCAPE){
-			menu_switch_state(MENU_STATE_EDIT_OVERVIEW);
-		}else if(key == KEY_ENTER){
-			menu_edit_option_save();
-			menu_switch_state(MENU_STATE_EDIT_OVERVIEW);
+		if(key == KEY_ESCAPE || key == KEY_ENTER){
+			if(key == KEY_ENTER)
+				menu_edit_option_save();
+			if(menu_used_args_short){
+				menu_used_args_short = FALSE;
+				menu_switch_state(MENU_STATE_MAIN);
+			}else{
+				menu_switch_state(MENU_STATE_EDIT_OVERVIEW);
+			}
 		}else if(key == KEY_P_8){
 			if(!menu_edit_editing_key){
 				menu_edit_editing_key = TRUE;
