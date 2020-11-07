@@ -170,7 +170,7 @@ void kb_keypress(uint8_t scanCode){
 			break;
 
 			default: {
-				uint8_t asciif = asciic;
+				uint16_t asciif = asciic;
 				if((kb_shift || kb_capslock) && !(kb_shift && kb_capslock) && ((asciic > 48 && asciic < 58) || (asciic > 96 && asciic < 123))){
 					asciif -= (asciic < 64) ? 16 : 32;
 				}
