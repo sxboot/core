@@ -36,6 +36,9 @@ static uint16_t console_text_length = 0;
 static char* serial_text;
 static uint16_t serial_text_length = 0;
 
+static list_array* commandHistory = NULL;
+static size_t commandHistoryIndex = 0;
+
 
 status_t cli_init(){
 	status_t status = 0;
@@ -43,6 +46,11 @@ status_t cli_init(){
 	if(console_text == 0)
 		FERROR(TSX_OUT_OF_MEMORY);
 	reloc_ptr((void**) &console_text);
+	commandHistory = list_array_create(0);
+	if(commandHistory == 0)
+		FERROR(TSX_OUT_OF_MEMORY);
+	reloc_ptr((void**) &commandHistory);
+
 	serial_text = (char*) kmalloc(MMGR_BLOCK_SIZE);
 	if(serial_text == 0)
 		FERROR(TSX_OUT_OF_MEMORY);
@@ -63,7 +71,34 @@ void cli_console_key(uint16_t c){
 		if(console_text_length <= 0)
 			return;
 		console_text[console_text_length--] = 0;
-		delChar();
+		printChar(0x8, 0x7); // backspace character
+	}else if(c == KEY_P_2){ // down
+		if(commandHistory->length > 0 && commandHistoryIndex < commandHistory->length - 1){
+			while(console_text_length--)
+				printChar(0x8, 0x7); // backspace character
+			char* str = commandHistory->base[++commandHistoryIndex];
+			size_t strLen = strlen(str);
+			memcpy(console_text, str, strLen + 1);
+			console_text_length = strLen;
+			for(size_t i = 0; i < console_text_length; i++)
+				printChar(str[i], 0x7);
+		}else{
+			while(console_text_length--)
+				printChar(0x8, 0x7); // backspace character
+			console_text_length = 0;
+			console_text[0] = 0;
+		}
+	}else if(c == KEY_P_8){ // up
+		if(commandHistory->length > 0 && commandHistoryIndex > 0){
+			while(console_text_length--)
+				printChar(0x8, 0x7); // backspace character
+			char* str = commandHistory->base[--commandHistoryIndex];
+			size_t strLen = strlen(str);
+			memcpy(console_text, str, strLen + 1);
+			console_text_length = strLen;
+			for(size_t i = 0; i < console_text_length; i++)
+				printChar(str[i], 0x7);
+		}
 	}else{
 		if(console_text_length >= MMGR_BLOCK_SIZE - 8)
 			return;
@@ -122,6 +157,12 @@ void cli_command(uint8_t dest, char* s){
 	if(strlen(s) < 1)
 		return;
 	int slen = strlen(s);
+	if(commandHistory->length > 0 ? (strcmp(s, commandHistory->base[commandHistory->length - 1]) != 0) : TRUE){
+		char* historyCopy = kmalloc(slen + 1);
+		memcpy(historyCopy, s, slen + 1);
+		list_array_push(commandHistory, historyCopy);
+	}
+	commandHistoryIndex = commandHistory->length;
 	for(int i = 0; i < slen; i++){
 		if(s[i] == ' '){
 			s[i] = 0;
