@@ -94,6 +94,23 @@
 							]
 						}
 					]
+				},
+				{
+					"title": "linux86",
+					"content": [
+						"The Linux x86 boot protocol (BIOS-only).",
+						{
+							"title": "Parameters",
+							"content": [
+								"$L",
+								"$l$ikernel$$ - Absolute path to the kernel file. ",
+									"See $a[https://docs.omegazero.org/docs/sxboot/?p=configfile&s=File_path_format]File path format$$.$$",
+								"$l$iinitrd$$ - Absolute path to the initrd file.$$",
+								"$l$iargs$$ - The command line passed to the kernel.$$",
+								"$$"
+							]
+						}
+					]
 				}
 			]
 		}
