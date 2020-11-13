@@ -1818,7 +1818,14 @@ loadS2:
 	mov		WORD[fat16readDir], bootFAT16D1
 	mov		WORD[fat16readFile], bootFAT16FB
 	call	loadFAT16File
-	jc		.bdd_load_fail
+	jnc		.bdd_loaded
+	; bdd not found
+	mov		si, bootFailB
+	mov		dh, 0xe
+	call	println16
+	mov		DWORD[bddAddress], 0
+	mov		DWORD[fat16readFSize], 0
+	.bdd_loaded:
 
 	mov		edx, DWORD[fat16readFSize]
 	mov		DWORD[bddSize], edx
@@ -1831,9 +1838,6 @@ loadS2:
 	ret
 	.s2_load_fail:
 	mov		si, bootFail
-	jmp		load_fail
-	.bdd_load_fail:
-	mov		si, bootFailB
 	jmp		load_fail
 	.files_too_large:
 	mov		si, bootTooLarg

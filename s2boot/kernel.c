@@ -131,7 +131,8 @@ status_t m_init(){
 	}
 	mmgr_reserve_mem_region(s1data->s2mapStart, s1data->s2mapLength * sizeof(s2map_entry), MMGR_MEMTYPE_BOOTLOADER_DATA);
 	mmgr_reserve_mem_region(s1data->s2bootAddress, s1data->s2bootSize, MMGR_MEMTYPE_BOOTLOADER_DATA);
-	mmgr_reserve_mem_region(s1data->bddAddress, s1data->bddSize, MMGR_MEMTYPE_BOOTLOADER_DATA);
+	if(s1data->bddAddress)
+		mmgr_reserve_mem_region(s1data->bddAddress, s1data->bddSize, MMGR_MEMTYPE_BOOTLOADER_DATA);
 	mmgr_reserve_mem_region(s1data->s1bootStart, s1data->s1bootEnd - s1data->s1bootStart, MMGR_MEMTYPE_BOOTLOADER);
 	if(!mmgr_is_area_clear(KERNEL_S3BOOT_LOCATION, KERNEL_S3BOOT_SIZE + KERNEL_S3BOOT_MAP_SIZE)){
 		status = TSX_MEMORY_RESERVED;
@@ -236,7 +237,6 @@ status_t m_init(){
 		kernel_print_error_trace();
 		goto _post_find_boot_drive;
 	}
-	//mmgr_free_mem_region(s1data->bddAddress, s1data->bddSize);
 
 	status = m_find_boot_drive();
 	_post_find_boot_drive:
@@ -329,13 +329,17 @@ status_t m_firmware_devinfo(uint8_t number, uint64_t* sectors, size_t* sectorSiz
 }
 
 status_t m_link_bdd(){
-	log_debug("Linking bdd (%Y)\n", s1data->bddAddress);
 	status_t status = 0;
+	if(!s1data->bddAddress)
+		FERROR(TSX_UNAVAILABLE);
+	log_debug("Linking bdd (%Y)\n", s1data->bddAddress);
 	elf_file* file = (elf_file*) (s1data->bddAddress);
 	char* type;
 	status = modules_init_disk_driver(file, &type);
 	memcpy((void*) bootDriveType, (void*) type, 4);
 	_end:
+	if(s1data->bddAddress)
+		mmgr_free_mem_region(s1data->bddAddress, s1data->bddSize);
 	return status;
 }
 
@@ -645,6 +649,8 @@ status_t m_s3boot(){
 	if(!(s1data->bootFlags & S1BOOT_DATA_BOOT_FLAGS_UEFI))
 		kernel_set_video(80, 25, 16, FALSE);
 #endif
+
+	stdio64_update_screen();
 
 	status_t status = arch_platform_reset();
 	CERROR();
