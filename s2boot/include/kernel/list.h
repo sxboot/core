@@ -20,6 +20,8 @@
 
 // when set, entries in the list will not be added to the list of relocatable pointers (used when entries in list are not references to objects)
 #define LIST_FLAGS_STATIC 1
+// when set, list reserves will use kmalloc_aligned (used for larger memory allocations) instead of kmalloc
+#define LIST_FLAGS_BIG 2
 
 typedef struct list_array{
 	size_t length;

@@ -85,12 +85,19 @@ void list_array_delete(list_array* list){
 status_t list_array_reserve(list_array* list, size_t len){
 	if(list->memlen >= len)
 		return 0;
-	void* nb = kmalloc(len * sizeof(void*));
+	void* nb;
+	if(list->flags & LIST_FLAGS_BIG)
+		nb = kmalloc_aligned(len * sizeof(void*));
+	else
+		nb = kmalloc(len * sizeof(void*));
 	if(nb == NULL)
 		return TSX_OUT_OF_MEMORY;
 	if(list->base != NULL){
 		memcpy(nb, list->base, list->memlen * sizeof(void*));
-		kfree(list->base, list->memlen * sizeof(void*));
+		if(list->flags & LIST_FLAGS_BIG)
+			kfree_aligned(list->base, list->memlen * sizeof(void*));
+		else
+			kfree(list->base, list->memlen * sizeof(void*));
 	}
 	list->base = nb;
 	list->memlen = len;

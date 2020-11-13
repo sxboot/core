@@ -153,7 +153,7 @@ status_t m_init(){
 
 	elf_file* s2bootImage = (elf_file*) (s1data->s2bootAddress);
 
-	m_reloc_list = list_array_create(LIST_FLAGS_STATIC);
+	m_reloc_list = list_array_create(LIST_FLAGS_STATIC | LIST_FLAGS_BIG);
 	if(m_reloc_list == NULL)
 		FERROR(TSX_OUT_OF_MEMORY);
 	list_array_reserve(m_reloc_list, 64);
