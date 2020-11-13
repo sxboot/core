@@ -123,3 +123,5 @@ void m_poll_events();
 
 status_t m_upstream_callback(size_t num, size_t arg0, size_t arg1, size_t arg2);
 
+void m_check_stack_overflow();
+

@@ -707,6 +707,7 @@ char* m_resolve_unknown_symbol(size_t addr, size_t* functionOffsetWrite){
 static size_t timerCounter = 0;
 
 void m_on_timer(){
+	m_check_stack_overflow();
 	if(timerCounter > 10){
 		timerCounter = 0;
 		stdio64_update_screen();
@@ -739,6 +740,17 @@ status_t m_upstream_callback(size_t num, size_t arg0, size_t arg1, size_t arg2){
 	CERROR();
 	_end:
 	return status;
+}
+
+
+void m_check_stack_overflow(){
+	size_t stackLoc = 0;
+	ARCH_GET_SP(stackLoc);
+	if(m_stack_top - stackLoc > KERNEL_STACK_SIZE - 128){
+		log_fatal("Stack Overflow (%u bytes)\n", m_stack_top - stackLoc);
+		kernel_print_stack_trace();
+		kernel_halt();
+	}
 }
 
 
