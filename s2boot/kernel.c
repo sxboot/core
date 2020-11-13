@@ -41,7 +41,7 @@
 #include "kernel.h"
 
 
-#define VERSION_MAJOR 10
+#define VERSION_MAJOR 11
 #define VERSION_MINOR 0
 
 
@@ -118,6 +118,8 @@ status_t m_init(){
 
 	log_debug("%s version %s\n", m_title, m_version_r);
 
+	log_debug("%ux%ux%u %s output\n", s1data->videoWidth, s1data->videoHeight, s1data->videoBpp, s1data->videoMode == 1 ? "text" : "graphics");
+
 	m_init_state = 1;
 	status = mmgr_init(s1data->mmapStart, s1data->mmapLength);
 	CERROR();
@@ -140,7 +142,7 @@ status_t m_init(){
 	}
 	mmgr_reserve_mem_region(KERNEL_S3BOOT_LOCATION, KERNEL_S3BOOT_SIZE + KERNEL_S3BOOT_MAP_SIZE, MMGR_MEMTYPE_BOOTLOADER);
 
-	log_debug("Memory: %uKiB total, %uKiB used\n", mmgr_get_total_memory() / 1024, mmgr_get_used_blocks() * MMGR_BLOCK_SIZE / 1024);
+	log_debug("Memory: %uKiB total, %uKiB used\n", (size_t) (mmgr_get_total_memory() / 1024), mmgr_get_used_blocks() * MMGR_BLOCK_SIZE / 1024);
 
 	status = m_upstream_callback(1, (size_t) (&kmalloc), 0, 0);
 	CERROR();

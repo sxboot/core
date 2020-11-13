@@ -33,7 +33,9 @@ static char* hexTmp = "0x0000000000000000";
 static char* hexTmp = "0x00000000";
 #endif
 
-static uint16_t* textLog = 0;
+static uint16_t textLog_early[STDIO64_EARLY_TEXT_LOG_LENGTH];
+static uint16_t* textLog = textLog_early;
+static size_t textLogLength = STDIO64_EARLY_TEXT_LOG_LENGTH;
 static size_t textLogIndex = 0;
 
 static size_t fontScale = 10;
@@ -221,10 +223,19 @@ status_t stdio64_init(){
 	reloc_ptr((void**) &textLog);
 	status = stdio64_reallocmem();
 	CERROR();
+	uint16_t* oTextLog = textLog;
 	textLog = kmalloc(STDIO64_TEXT_LOG_LENGTH * sizeof(uint16_t));
 	if(!textLog)
 		FERROR(TSX_OUT_OF_MEMORY);
 	memset(textLog, 0, STDIO64_TEXT_LOG_LENGTH * sizeof(uint16_t));
+	size_t nti = 0;
+	for(size_t i = textLogIndex; i < textLogLength + textLogIndex; i++){
+		uint16_t c = oTextLog[i % textLogLength];
+		if(c != 0)
+			textLog[nti++] = c;
+	}
+	textLogIndex = nti;
+	textLogLength = STDIO64_TEXT_LOG_LENGTH;
 	_end:
 	return status;
 }
@@ -590,7 +601,7 @@ void stdio64_text_log(char c, uint8_t attr){
 	if(!textLog)
 		return;
 	textLog[textLogIndex++] = (uint8_t) c | ((uint16_t) attr << 8);
-	if(textLogIndex >= STDIO64_TEXT_LOG_LENGTH){
+	if(textLogIndex >= textLogLength){
 		textLogIndex = 0;
 	}
 }
@@ -599,15 +610,15 @@ void reprintText(){
 	framebufferUpdates = FALSE;
 	size_t startIndex = textLogIndex + 1;
 	size_t lines = 0;
-	for(size_t i = STDIO64_TEXT_LOG_LENGTH + textLogIndex - 1; i >= textLogIndex + 1; i--){
+	for(size_t i = textLogLength + textLogIndex - 1; i >= textLogIndex + 1; i--){
 		startIndex = i;
-		if((textLog[i % STDIO64_TEXT_LOG_LENGTH] & 0xff) == '\n')
+		if((textLog[i % textLogLength] & 0xff) == '\n')
 			lines++;
 		if(lines > totalY)
 			break;
 	}
-	for(size_t i = startIndex; i < STDIO64_TEXT_LOG_LENGTH + textLogIndex; i++){
-		uint16_t c = textLog[i % STDIO64_TEXT_LOG_LENGTH];
+	for(size_t i = startIndex; i < textLogLength + textLogIndex; i++){
+		uint16_t c = textLog[i % textLogLength];
 		if(c != 0){
 			printChar_nlog(c & 0xff, c >> 8);
 		}
