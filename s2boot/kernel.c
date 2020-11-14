@@ -1059,6 +1059,8 @@ void kernel_halt(){
 
 
 void kernel_move_stack(size_t stackTop, size_t newStackSize){
+	bool inte = arch_is_hw_interrupts_enabled();
+	arch_disable_hw_interrupts();
 	size_t oldStackTop = m_stack_top;
 	m_stack_top = stackTop;
 	m_stack_size = newStackSize;
@@ -1079,6 +1081,8 @@ void kernel_move_stack(size_t stackTop, size_t newStackSize){
 			frame->next = ((arch_stack_frame*) ((size_t) frame->next - cStackLoc + newStackLoc));
 		frame = next;
 	}
+	if(inte)
+		arch_enable_hw_interrupts();
 }
 
 
