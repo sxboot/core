@@ -308,7 +308,7 @@ void mmgr_free_block_p(size_t addr){
 
 
 void* vmmgr_alloc_block(){
-	vmmgr_map_pages_req(mmgr_get_used_blocks() * MMGR_BLOCK_SIZE + MMGR_BLOCK_SIZE);
+	vmmgr_map_pages_req((mmgr_get_used_blocks_alloc() + mmgr_get_used_blocks_paging()) * MMGR_BLOCK_SIZE + MMGR_BLOCK_SIZE);
 	size_t paddress = (size_t) mmgr_alloc_block();
 	if(paddress == 0)
 		return 0;
@@ -316,7 +316,7 @@ void* vmmgr_alloc_block(){
 }
 
 void* vmmgr_alloc_block_sequential(size_t size){
-	vmmgr_map_pages_req(mmgr_get_used_blocks() * MMGR_BLOCK_SIZE + size);
+	vmmgr_map_pages_req((mmgr_get_used_blocks_alloc() + mmgr_get_used_blocks_paging()) * MMGR_BLOCK_SIZE + size);
 	size_t paddress = (size_t) mmgr_alloc_block_sequential(size);
 	if(paddress == 0)
 		return 0;
