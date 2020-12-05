@@ -455,8 +455,14 @@ status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs
 
 	path++;
 	size_t parts = util_count_parts(path, '/');
-	uint16_t lastCluster = directory->clusterLow;
-	size_t dirLBA = VFS_FAT16_DATASTART + (directory->clusterLow - 2) * bpb->sectorsPerCluster;
+	uint16_t lastCluster = 0;
+	size_t dirLBA;
+	if(directory){
+		lastCluster = directory->clusterLow;
+		dirLBA = VFS_FAT16_DATASTART + (directory->clusterLow - 2) * bpb->sectorsPerCluster;
+	}else{ // directory == NULL: root directory
+		dirLBA = bpb->hiddenSectors + bpb->reservedSectors + bpb->numberOfFATs * bpb->sectorsPerFAT;
+	}
 	char* next = path + strlen(path);
 	for(; next > path && *(next - 1) != '/'; next--); // cut to the last part
 
