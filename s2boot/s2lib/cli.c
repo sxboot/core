@@ -254,7 +254,8 @@ void cli_command_cat(uint8_t dest, char* args){
 	for(size_t i = 0; i < fileSize; i++){
 		cli_printf(dest, "%c", *((char*) (raddr + i)));
 	}
-	kfree((void*) raddr, fileSize);
+	if(raddr)
+		kfree((void*) raddr, fileSize);
 	if(status != TSX_SUCCESS){
 		cli_printf(dest, "Error %u (%s)\n", (size_t) status, errcode_get_name(status));
 		kernel_print_error_trace();
