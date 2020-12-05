@@ -330,6 +330,12 @@ setupPaging:
 	push	ecx
 	push	edx
 	push	edi
+
+	mov		edi, pageTablesBase
+	xor		eax, eax
+	mov		ecx, 0x4000
+	rep		stosb
+
 	; page map level 4 table
 	mov		DWORD[pageTablesBase], pageTablesBase + 0x1003 ; phys address 0x1000, set present (0x1) and r/w (0x2) bit
 
@@ -866,6 +872,12 @@ parseELF64:
 	add		rdx, QWORD[rbx + 0x28] ; size in memory
 	mov		QWORD[rdi + 8], rdx
 	inc		WORD[s2mapLength]
+
+	mov		rdi, QWORD[rbx + 0x10] ; target address
+	add		rdi, s2bootStartVirt
+	mov		rcx, QWORD[rbx + 0x28] ; size in memory
+	xor		rax, rax
+	rep		stosb
 
 	mov		rcx, QWORD[rbx + 0x20] ; size in file
 	mov		rdi, QWORD[rbx + 0x10] ; target address

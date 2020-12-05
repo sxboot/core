@@ -602,6 +602,12 @@ parseELF32:
 	mov		DWORD[edi + 4], edx
 	inc		WORD[s2mapLength]
 
+	mov		edi, DWORD[ebx + 0x08] ; target address
+	add		edi, s2bootStartVirt
+	mov		ecx, DWORD[ebx + 0x14] ; size in memory
+	xor		eax, eax
+	rep		stosb
+
 	mov		ecx, DWORD[ebx + 0x10] ; size in file
 	mov		edi, DWORD[ebx + 0x08] ; target address
 	add		edi, s2bootStartVirt
@@ -749,6 +755,12 @@ setupPaging:
 	push	ecx
 	push	edx
 	push	edi
+
+	mov		edi, pageTablesBase
+	xor		eax, eax
+	mov		ecx, 0x2000
+	rep		stosb
+
 	; page directory table
 	mov		DWORD[pageTablesBase], pageTablesBase + 0x1003 ; phys address 0x1000, set present (0x1) and r/w (0x2) bit
 
