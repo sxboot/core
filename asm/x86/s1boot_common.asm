@@ -675,105 +675,47 @@ dap_start_l	dd	0
 dap_start_h	dd	0
 
 readSectors16:
-	;edx = start sector    cx = to read    ebx = dest
+	; edx = start sector    cx = to read    ebx = dest
+	push	edx
 	push	ebx
+	push	cx
+	push	dx
+	push	si
+	.read:
+	push	cx
+	push	ebx
+	push	edx
+	mov		WORD[dap_count], 1
 	mov		DWORD[dap_start_l], edx
-	mov		WORD[dap_count], cx
 	mov		WORD[dap_buf_off], bx
 	and		ebx, 0xffff0000
 	shr		ebx, 4
 	mov		WORD[dap_buf_seg], bx
-	pop		ebx
 
 	push	dx
-	mov		dx, 0
-	call	sleep16
-	pop		dx
-
-	push	dx
-	push	si
 	mov		ah, 0x42
 	mov		dl, BYTE[bootDrive]
 	mov		si, dap_start
 	int		0x13
+	pop		dx
+	pop		edx
+	pop		ebx
+	pop		cx
+	jc		.end
+
+	inc		edx
+	movzx	esi, WORD[bBytesPSec]
+	add		ebx, esi
+	loop	.read
+
+	.end:
 	pop		si
 	pop		dx
-	ret
-
-sinc		db	0x0
-read_start	dd	0x0
-
-readSectors16_legacy:
-	;edx = start sector    cx = to read    ebx = dest
-	cmp		cx, 0
-	jne		.c1
-	ret
-	.c1:
-	mov		DWORD[read_start], edx
-	push	cx
-	mov		ax, WORD[bBytesPSec]
-	xor		dx, dx
-	mov		cx, 16
-	div		cx
-	mov		BYTE[sinc], al
 	pop		cx
-	shr		ebx, 4
-	;DWORD[read_start] = start sector    cx = to read    bx = dest
-	.l:
-	call	updateLoadingWheel16
-	push	cx
-	push	bx
-	push	es
-	dec		cx
-	mov		ax, cx
-	xor		dx, dx
-	mul		BYTE[sinc]
-	mov		es, bx
-	xor		bx, bx
-	mov		dx, es
-	add		dx, ax
-	mov		es, dx
-	add		ecx, DWORD[read_start]
-	;ax = 1    ecx = mod start sector    bx = 0    es = mod dest segm
-
-	push	di
-	;add		ecx, WORD[hiddenSectors]
-	mov		eax, ecx
-	xor		edx, edx
-	div		WORD[bSecsPTrack]
-	inc		dl
-	mov		cl, dl
-	xor		dx, dx
-	div		WORD[bHeads]
-	mov		dh, dl
-	mov		ch, al
-	mov		dl, BYTE[bootDrive]
-	mov		ah, 2
-	mov		al, 1
-	mov		di, 5
-	.read:
-	int		0x13
-	jnc		.success
-	dec		di
-	jnz		.read
-	pop		di
-
-	pop		es
-	pop		bx
-	pop		cx
-	jmp		.fail
-	.success:
-	pop		di
-
-	pop		es
-	pop		bx
-	pop		cx
-	loop	.l
-	clc
+	pop		ebx
+	pop		edx
 	ret
-	.fail:
-	stc
-	ret
+
 
 main16_option2_printPartitions_getData:
 	mov		ax, cx
