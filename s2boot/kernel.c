@@ -221,9 +221,8 @@ status_t m_init(){
 	arch_on_timer_fire(&m_on_timer);
 
 	kernel_pseudorandom_seed((size_t) arch_real_time());
-	// add some more "randomness"
-	for(size_t i = 0; i < kernel_pseudorandom(100); i++){
-		kernel_pseudorandom(1);
+	for(size_t i = 0; i < (size_t) arch_time() % 100; i++){
+		kernel_pseudorandom(arch_time());
 	}
 
 	status = msio_init();
@@ -481,11 +480,13 @@ status_t m_select(){
 			}
 			m_poll_events();
 		}else if(m_state == KERNEL_STATE_CONSOLE){
-			arch_sleep(10);
+			arch_sleep(50);
 			m_poll_events();
 		}else{
 			break;
 		}
+		// collect more entropy by calling this here (the delay between calls can be quite random because of keypresses etc)
+		kernel_pseudorandom(arch_time());
 	}
 	serial_on_input(NULL);
 	m_reset_state();
@@ -1333,8 +1334,8 @@ void kernel_runtime_assertion(bool x, char* msg){
 size_t kernel_pseudorandom(size_t max){
 	if(max == 0)
 		return 0;
-	rand_next = rand_next * 1103515245 + 12345;
-	return (size_t) (rand_next) % max;
+	rand_next = rand_next * 1103515245 + 12345 * max;
+	return (size_t) rand_next % max;
 }
 
 void kernel_pseudorandom_seed(size_t seed){
