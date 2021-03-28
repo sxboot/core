@@ -994,6 +994,7 @@ serviceCallback: ; di, si, dx, cx
 	mov		ax, 0x0003 ; ah = 0 set video mode, al = 3 video mode number
 	int		0x10
 	jc		.vbe_err
+	mov		WORD[retCode], 0
 	jmp		.vbe_done
 
 	.nonStandardMode:
