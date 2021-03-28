@@ -63,6 +63,7 @@ status_t cli_init(){
 void cli_console_key(uint16_t c){
 	if(c == KEY_ENTER){
 		console_text[console_text_length] = 0;
+		console_text[console_text_length + 1] = 0; // safe because input will block multiple bytes before the end of the buffer
 		printf("\n");
 		cli_command(0, console_text);
 		if(kernel_is_console_running())
@@ -111,6 +112,7 @@ void cli_serial_key(uint8_t c){
 	menu_stop_autoboot();
 	if(c == '\n' || c == '\r'){
 		serial_text[serial_text_length] = 0;
+		serial_text[serial_text_length + 1] = 0;
 		serial_write('\r');
 		serial_write('\n');
 		cli_command(1, serial_text);
@@ -200,9 +202,15 @@ void cli_printf(uint8_t dest, char* str, ...){
 
 
 void cli_command_help(uint8_t dest, char* args){
-	cli_printf(dest, "Builtin commands:\n&fhelp&7: shows this list\n&fmenu&7: returns to menu\n&fboot <index>&7: boots the entry with the given index starting at 0\n\
-&fmem&7: Shows memory usage information\n&fmemmap&7: shows the memory allocation map\n&fcat <file>&7: print the contents of a file\n\
-&fls <directory>&7: print the contents of a directory\n");
+	cli_printf(dest, "Builtin commands:\n"
+		"&fhelp&7: shows this list\n"
+		"&fmenu&7: returns to menu\n"
+		"&fboot <index>&7: boots the entry with the given index starting at 0\n"
+		"&fmem&7: Shows memory usage information\n"
+		"&fmemmap&7: shows the memory allocation map\n"
+		"&fbootdrive&7: prints the name of the boot drive\n"
+		"&fcat <file>&7: prints the contents of a file\n"
+		"&fls <directory>&7: prints the contents of a directory\n");
 }
 
 // menu and boot commands are in kernel.c
@@ -282,6 +290,7 @@ void cli_command_ls(uint8_t dest, char* args){
 	}
 }
 
+
 void cli_command_dbgstack(uint8_t dest, char* args){
 	kernel_print_stack_trace(); // fix for serial
 }
@@ -298,32 +307,21 @@ void cli_command_dbgreloc(uint8_t dest, char* args){
 
 void cli_command_dbgvid(uint8_t dest, char* args){
 	char* numstr = args;
+	size_t widthLen = strlen(numstr) + 1;
+	if(widthLen <= 1)
+		goto missingParameter;
 	size_t width = util_str_to_int(numstr);
-	size_t height = util_str_to_int(numstr + strlen(numstr) + 1);
-	status_t status = 0;
-	if(width == 1){
-		status = kernel_set_video(640, 480, 32, TRUE);
-	}else if(width == 2){
-		status = kernel_set_video(800, 600, 32, TRUE);
-	}else if(width == 3){
-		status = kernel_set_video(1024, 768, 32, TRUE);
-	}else if(width == 4){
-		status = kernel_set_video(1280, 1024, 32, TRUE);
-	}else if(width == 5){
-		status = kernel_set_video(1600, 900, 32, TRUE);
-	}else if(width == 6){
-		status = kernel_set_video(320, 200, 32, TRUE);
-	}else if(width == 7){
-		status = kernel_set_video(720, 480, 32, TRUE);
-	}else if(width == 8){
-		status = kernel_set_video(80, 25, 16, FALSE);
-	}else if(width == 9){
-		status = kernel_set_video(80, 60, 16, FALSE);
-	}else{
-		status = kernel_set_video(width, height, 32, TRUE);
-	}
+	size_t heightLen = strlen(numstr + widthLen) + 1;
+	if(heightLen <= 1)
+		goto missingParameter;
+	size_t height = util_str_to_int(numstr + widthLen);
+	bool graphicsMode = !util_str_to_int(numstr + widthLen + heightLen); // will return 0 if string is empty
+	status_t status = kernel_set_video(width, height, graphicsMode ? 32 : 16, graphicsMode);
 	cli_printf(dest, "status %u\n", (size_t) status);
 	kernel_print_error_trace();
+	return;
+	missingParameter:
+	cli_printf(dest, "Missing parameter\n");
 }
 
 void cli_command_dbgdrive(uint8_t dest, char* args){
@@ -347,6 +345,7 @@ void cli_command_dbgscale(uint8_t dest, char* args){
 	stdio64_get_text_size(&rows, &cols);
 	cli_printf(dest, "%ux%u cells\n", cols, rows);
 }
+
 
 #ifdef ARCH_UPSTREAM_x86
 void cli_command_e820map(uint8_t dest, char* args){
