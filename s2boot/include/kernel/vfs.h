@@ -133,7 +133,6 @@ status_t vfs_cache_mount(char* driveLabel, uint8_t partNum, vfs_fs_driver* drive
 vfs_fs_driver* vfs_get_driver_from_cache(char* driveLabel, uint8_t partNum);
 vfs_fs_driver* vfs_get_driver(char* driveLabel, uint8_t partNum, uint64_t partStart);
 status_t vfs_get_partition_lba(char* drive, uint8_t partNum, uint64_t* lbaWrite);
-size_t vfs_get_data_temp();
 
 bool vfs_fat16_isFilesystem(char* driveLabel, uint64_t partStart);
 status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, size_t dest);

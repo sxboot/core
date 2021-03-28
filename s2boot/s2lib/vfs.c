@@ -28,16 +28,10 @@
 static list_array* vfs_drivers = NULL;
 static list_array* vfs_mounts = NULL;
 
-static void* vfs_data_temp = NULL;
-
 static char* gptSignature = "EFI PART";
 
 status_t vfs_init(){
 	status_t status = 0;
-	vfs_data_temp = kmalloc(8192);
-	if(vfs_data_temp == NULL)
-		FERROR(TSX_OUT_OF_MEMORY);
-	reloc_ptr((void**) &vfs_data_temp);
 	vfs_drivers = list_array_create(0);
 	if(vfs_drivers == NULL)
 		FERROR(TSX_OUT_OF_MEMORY);
@@ -220,31 +214,38 @@ status_t vfs_get_partition_lba(char* drive, uint8_t partNum, uint64_t* lbaWrite)
 	return status;
 }
 
-size_t vfs_get_data_temp(){
-	// some of this code was written before even kmalloc() existed, which is why this still exists
-	return (size_t) (vfs_data_temp);
-}
 
 
 bool vfs_fat16_isFilesystem(char* driveLabel, uint64_t partStart){
-	vfs_fat16_bpb* bpb = (vfs_fat16_bpb*) (vfs_get_data_temp());
+	vfs_fat16_bpb* bpb = kmalloc(4096);
+	if(!bpb)
+		return FALSE;
 	status_t status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
-	if(status != 0)
-		return false;
-	return util_str_startsWith(bpb->filesystemName, "FAT16   ");
+	if(status != 0){
+		kfree(bpb, 4096);
+		return FALSE;
+	}
+	bool isValid = util_str_startsWith(bpb->filesystemName, "FAT16   ");
+	kfree(bpb, 4096);
+	return isValid;
 }
 
 status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, size_t dest){
 	vfs_fat_dir_entry* result = 0;
+	vfs_fat16_bpb* bpb = NULL;
 	void* destTmp = NULL;
+	uint16_t* fat = NULL;
 	status_t status = vfs_fat16_getFile(driveLabel, partStart, path, &result);
 	CERROR();
 	uint16_t cluster = result->clusterLow;
-	vfs_fat16_bpb* bpb = (vfs_fat16_bpb*) (vfs_get_data_temp() + 4096); // bpb was read to this location by vfs_fat16_getFile
-	updateLoadingWheel();
 	if(cluster < 2){ // cluster == 0: file exists but is empty
 		goto _end;
 	}
+	bpb = kmalloc(4096);
+	if(!bpb)
+		FERROR(TSX_OUT_OF_MEMORY);
+	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
+	CERROR();
 
 	// use temporary buffer because caller buffer is likely smaller than the size of the memory area the file will be read to (can only read in blocks of size clusterSize)
 	size_t fileSize = result->size;
@@ -259,7 +260,9 @@ status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, si
 	size_t dirLBA = VFS_FAT16_DATASTART + (cluster - 2) * bpb->sectorsPerCluster;
 	size_t read = 0;
 	size_t lastFATSectorOffset = -1;
-	uint16_t* fat = (uint16_t*) vfs_get_data_temp();
+	fat = kmalloc(4096);
+	if(!fat)
+		FERROR(TSX_OUT_OF_MEMORY);
 	while(cluster >= 0x0002 && cluster <= 0xffef){
 		updateLoadingWheel();
 		status = msio_read_drive(driveLabel, VFS_FAT16_DATASTART + (cluster - 2) * bpb->sectorsPerCluster, bpb->sectorsPerCluster,
@@ -276,8 +279,12 @@ status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, si
 	}
 	memcpy((void*) dest, destTmp, fileSize);
 	_end:
+	if(fat)
+		kfree(fat, 4096);
 	if(destTmp)
 		kfree_aligned(destTmp, destTmpSize);
+	if(bpb)
+		kfree(bpb, 4096);
 	return status;
 }
 
@@ -293,11 +300,16 @@ status_t vfs_fat16_getFileSize(char* driveLabel, uint64_t partStart, char* path,
 
 status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, list_array** listWrite){
 	vfs_fat_dir_entry* result = 0;
-	uint16_t* fat = 0;
-	vfs_fat_dir_entry* dirTable = 0;
+	vfs_fat16_bpb* bpb = NULL;
+	vfs_fat_dir_entry* dirTable = NULL;
+	uint16_t* fat = NULL;
 	status_t status = vfs_fat16_getDir(driveLabel, partStart, path, &result);
 	CERROR();
-	vfs_fat16_bpb* bpb = (vfs_fat16_bpb*) (vfs_get_data_temp() + 4096);
+	bpb = kmalloc(4096);
+	if(!bpb)
+		FERROR(TSX_OUT_OF_MEMORY);
+	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
+	CERROR();
 	list_array* list = list_array_create(0);
 	// result == NULL means it is the root directory
 	uint16_t cluster = result ? result->clusterLow : 0;
@@ -347,20 +359,27 @@ status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, lis
 		kfree(fat, 4096);
 	if(dirTable)
 		kfree(dirTable, sectors * bpb->bytesPerSector);
+	if(bpb)
+		kfree(bpb, 4096);
 	return status;
 }
 
 
 status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry** entryWrite){
 	status_t status = 0;
+	vfs_fat16_bpb* bpb = NULL;
+	vfs_fat_dir_entry* dirTable = NULL;
 	if(util_str_contains(path, ' '))
 		FERROR(TSX_INVALID_SYNTAX);
 	updateLoadingWheel();
-	vfs_fat16_bpb* bpb = (vfs_fat16_bpb*) (vfs_get_data_temp() + 4096);
+	bpb = kmalloc(4096);
+	if(!bpb)
+		FERROR(TSX_OUT_OF_MEMORY);
 	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
 	CERROR();
-	updateLoadingWheel();
-	vfs_fat_dir_entry* dirTable = (vfs_fat_dir_entry*) vfs_get_data_temp();
+	dirTable = kmalloc(4096);
+	if(!dirTable)
+		FERROR(TSX_OUT_OF_MEMORY);
 	path++;
 	size_t parts = util_count_parts(path, '/');
 	char* next = path;
@@ -436,15 +455,23 @@ status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_
 	}
 	*entryWrite = result;
 	_end:
+	if(dirTable)
+		kfree(dirTable, 4096);
+	if(bpb)
+		kfree(bpb, 4096);
 	return status;
 }
 
 status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry** entryWrite){
 	status_t status = 0;
+	vfs_fat16_bpb* bpb = NULL;
+	vfs_fat_dir_entry* dirTable = NULL;
 	if(util_str_contains(path, ' '))
 		FERROR(TSX_INVALID_SYNTAX);
 	updateLoadingWheel();
-	vfs_fat16_bpb* bpb = (vfs_fat16_bpb*) (vfs_get_data_temp() + 4096);
+	bpb = kmalloc(4096);
+	if(!bpb)
+		FERROR(TSX_OUT_OF_MEMORY);
 	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
 	CERROR();
 	updateLoadingWheel();
@@ -466,7 +493,9 @@ status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs
 	char* next = path + strlen(path);
 	for(; next > path && *(next - 1) != '/'; next--); // cut to the last part
 
-	vfs_fat_dir_entry* dirTable = (vfs_fat_dir_entry*) vfs_get_data_temp();
+	dirTable = kmalloc(4096);
+	if(!dirTable)
+		FERROR(TSX_OUT_OF_MEMORY);
 	bool found = FALSE;
 	vfs_fat_dir_entry* result;
 
@@ -559,8 +588,11 @@ status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs
 	}
 	if(!found) // this should never be true
 		FERROR(TSX_NO_SUCH_FILE);
-	updateLoadingWheel();
 	*entryWrite = result;
 	_end:
+	if(dirTable)
+		kfree(dirTable, 4096);
+	if(bpb)
+		kfree(bpb, 4096);
 	return status;
 }
