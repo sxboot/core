@@ -248,6 +248,7 @@ status_t parse_file_entry(uint8_t index){
 	return status;
 }
 
+
 char* parse_get_option(parse_entry* entry, char* key){
 	for(size_t i = 0; i < entry->optionsKeys->length; i++){
 		if(util_str_equals(entry->optionsKeys->base[i], key)){
@@ -256,6 +257,28 @@ char* parse_get_option(parse_entry* entry, char* key){
 	}
 	return NULL;
 }
+
+size_t parse_get_number(parse_entry* entry, char* key){
+	size_t num = 0;
+	char* value = parse_get_option(entry, key);
+	if(value)
+		num = util_str_to_int(value);
+	return num;
+}
+
+bool parse_get_boolean(parse_entry* entry, char* key){
+	char* value = parse_get_option(entry, key);
+	if(value){
+		if(strcmp(value, "true") == 0)
+			return TRUE;
+		else if(strcmp(value, "false") == 0)
+			return FALSE;
+		else
+			return !!util_str_to_int(value);
+	}else
+		return FALSE;
+}
+
 
 parse_data_t* parse_get_data(){
 	return &parse_data;

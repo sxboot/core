@@ -41,7 +41,11 @@ typedef struct parse_data{
 
 status_t parse_file(char* file);
 status_t parse_file_entry(uint8_t index);
+
 char* parse_get_option(parse_entry* entry, char* key);
+size_t parse_get_number(parse_entry* entry, char* key);
+bool parse_get_boolean(parse_entry* entry, char* key);
+
 parse_data_t* parse_get_data();
 
 
