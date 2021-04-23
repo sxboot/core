@@ -142,7 +142,7 @@ status_t m_init(){
 	}
 	mmgr_reserve_mem_region(KERNEL_S3BOOT_LOCATION, KERNEL_S3BOOT_SIZE + KERNEL_S3BOOT_MAP_SIZE, MMGR_MEMTYPE_BOOTLOADER);
 
-	log_debug("Memory: %uKiB total, %uKiB used\n", (size_t) (mmgr_get_total_memory() / 1024), mmgr_get_used_blocks() * MMGR_BLOCK_SIZE / 1024);
+	log_debug("Memory: %uKiB total, %uKiB used\n", (size_t) (mmgr_get_total_memory() / 1024), mmgr_get_used_mem_kib());
 
 	status = m_upstream_callback(1, (size_t) (&kmalloc), 0, 0);
 	CERROR();
@@ -634,9 +634,6 @@ status_t m_load_s3boot(){
 	s3data.magic = S3BOOT_MAGIC;
 	s3boot_loaded = TRUE;
 	m_start_add_s3boot_map_entry(0x500, KERNEL_S3BOOT_LOCATION - 0x500, 0);
-	/*m_start_add_s3boot_map_entry(0x7e00, s1data->mmapStart - 0x7e00, 0);
-	m_start_add_s3boot_map_entry(s1data->mmapStart + s1data->mmapLength * sizeof(mmap_entry),
-		0x7ffff - (s1data->mmapStart + s1data->mmapLength * sizeof(mmap_entry)), 0);*/
 	_end:
 	return status;
 }
@@ -1256,8 +1253,7 @@ status_t kernel_relocate(size_t newAddr){
 			log_warn("Cannot unmap address space 0x%X - 0x%X because it is out of range\n", vmemmap[i].addr, vmemmap[i].addr + vmemmap[i].size - 1);
 			continue;
 		}
-		//log_debug("unmap %Y - %Y\n", vmemmap[i].addr, vmemmap[i].addr + vmemmap[i].size - 1);
-		for(size_t addr = 0; addr < vmemmap[i].size; addr += MMGR_BLOCK_SIZE){
+		for(size_t addr = 0; addr < vmemmap[i].size; addr += VMMGR_PAGE_SIZE){
 			vmmgr_unmap_page(vmemmap[i].addr + addr);
 		}
 	}
