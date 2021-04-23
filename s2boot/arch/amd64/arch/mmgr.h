@@ -36,6 +36,10 @@
 #define VMMGR_PAGE_SIZE_4MB 128
 #define VMMGR_PAGE_GLOBAL 256
 
+#define VMMGR_PAGE_SIZE 4096
+
+#define VMMGR_PAGE_TABLE_SIZE(x) ((x) / 512 + (x) / 262144 + (x) / 134217728)
+
 #define vmmgr_page_descriptor uint64_t
 
 

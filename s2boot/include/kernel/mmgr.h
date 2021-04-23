@@ -78,6 +78,8 @@ void mmgr_free_block_p(size_t addr);
 
 void* vmmgr_alloc_block();
 void* vmmgr_alloc_block_sequential(size_t size);
+status_t vmmgr_map_pages(size_t phys, size_t virt, size_t size);
+void vmmgr_map_pages_req_additional(size_t size);
 void vmmgr_map_pages_req(size_t usedMem);
 void vmmgr_free_block(size_t addr);
 void vmmgr_free_block_sequential(size_t addr, size_t size);

@@ -1098,9 +1098,7 @@ status_t kernel_set_video(size_t width, size_t height, size_t bpp, bool graphics
 	log_debug("Attempting to set video %ux%ux%u\n", vidmode.width, vidmode.height, vidmode.bpp);
 	status_t status = m_upstream_callback(10, (size_t) &vidmode, 0, 0);
 	CERROR();
-	for(size_t addr = 0; addr < vidmode.bytesPerLine * vidmode.height; addr += 0x1000){
-		vmmgr_map_page(vidmode.framebuffer + addr, vidmode.framebuffer + addr + m_reloc_base);
-	}
+	vmmgr_map_pages(vidmode.framebuffer, vidmode.framebuffer + m_reloc_base, vidmode.bytesPerLine * vidmode.height);
 	stdio64_set_mode(graphics ? STDIO64_MODE_GRAPHICS : STDIO64_MODE_TEXT, (void*) (vidmode.framebuffer + m_reloc_base),
 		vidmode.width, vidmode.height, vidmode.bpp, vidmode.bytesPerLine);
 	reprintText();
@@ -1233,10 +1231,7 @@ status_t kernel_relocate(size_t newAddr){
 			log_warn("Cannot map address space 0x%X - 0x%X because it is out of range\n", vmemmap[i].addr, vmemmap[i].addr + vmemmap[i].size - 1);
 			continue;
 		}
-		//log_debug("map %Y - %Y\n", vmemmap[i].addr - oldAddr + newAddr, vmemmap[i].addr + vmemmap[i].size - oldAddr + newAddr - 1);
-		for(size_t addr = 0; addr < vmemmap[i].size; addr += MMGR_BLOCK_SIZE){
-			vmmgr_map_page(vmemmap[i].addr + addr - oldAddr, vmemmap[i].addr + addr - oldAddr + newAddr);
-		}
+		vmmgr_map_pages(vmemmap[i].addr - oldAddr, vmemmap[i].addr - oldAddr + newAddr, vmemmap[i].size);
 	}
 
 	kernel_relocate_pointers(oldAddr, newAddr);

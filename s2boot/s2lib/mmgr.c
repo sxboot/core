@@ -308,7 +308,7 @@ void mmgr_free_block_p(size_t addr){
 
 
 void* vmmgr_alloc_block(){
-	vmmgr_map_pages_req((mmgr_get_used_blocks_alloc() + mmgr_get_used_blocks_paging()) * MMGR_BLOCK_SIZE + MMGR_BLOCK_SIZE);
+	vmmgr_map_pages_req_additional(MMGR_BLOCK_SIZE);
 	size_t paddress = (size_t) mmgr_alloc_block();
 	if(paddress == 0)
 		return 0;
@@ -316,7 +316,7 @@ void* vmmgr_alloc_block(){
 }
 
 void* vmmgr_alloc_block_sequential(size_t size){
-	vmmgr_map_pages_req((mmgr_get_used_blocks_alloc() + mmgr_get_used_blocks_paging()) * MMGR_BLOCK_SIZE + size);
+	vmmgr_map_pages_req_additional(size);
 	size_t paddress = (size_t) mmgr_alloc_block_sequential(size);
 	if(paddress == 0)
 		return 0;
@@ -329,6 +329,24 @@ void* vmmgr_alloc_block_sequential(size_t size){
 											(page tables will use free memory below this; it is guaranteed that there is enough memory for the tables)
 	*/
 	return (void*) (paddress + vmmgr_membase);
+}
+
+status_t vmmgr_map_pages(size_t phys, size_t virt, size_t size){
+	status_t status = 0;
+	size_t pts = VMMGR_PAGE_TABLE_SIZE(size);
+	if(pts < 1)
+		pts++;
+	vmmgr_map_pages_req_additional(pts);
+	for(size_t addr = 0; addr < size; addr += VMMGR_PAGE_SIZE){
+		status = vmmgr_map_page(phys + addr, virt + addr);
+		CERROR();
+	}
+	_end:
+	return status;
+}
+
+void vmmgr_map_pages_req_additional(size_t size){
+	vmmgr_map_pages_req(mmgr_get_used_blocks() * MMGR_BLOCK_SIZE + size);
 }
 
 void vmmgr_map_pages_req(size_t usedMem){
