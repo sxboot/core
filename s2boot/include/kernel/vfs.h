@@ -77,9 +77,9 @@ typedef struct vfs_gpt_partition_entry{
 
 // FAT 16
 
-#define VFS_FAT_DIR_ENTRY_FILE_NEW 0
-#define VFS_FAT_DIR_ENTRY_FILE 0x20
+#define VFS_FAT_DIR_ENTRY_VOLUMELABEL 0x8
 #define VFS_FAT_DIR_ENTRY_SUBDIR 0x10
+#define VFS_FAT_DIR_ENTRY_ARCHIVE 0x20
 
 #define VFS_FAT16_DATASTART (bpb->hiddenSectors + bpb->reservedSectors + bpb->numberOfFATs * bpb->sectorsPerFAT + bpb->rootEntries * 32 / bpb->bytesPerSector)
 
@@ -95,6 +95,17 @@ typedef struct vfs_fat_dir_entry{
 	uint16_t clusterLow;
 	uint32_t size;
 } vfs_fat_dir_entry;
+
+typedef struct vfs_fat_lfn_entry{
+	uint8_t sequence;
+	uint16_t name1[5];
+	uint8_t attributes;
+	uint8_t type;
+	uint8_t checksum;
+	uint16_t name2[6];
+	uint16_t clusterLow;
+	uint16_t name3[2];
+} vfs_fat_lfn_entry;
 
 typedef struct vfs_fat16_bpb{
 	uint8_t bootJMP[3];
@@ -138,8 +149,8 @@ bool vfs_fat16_isFilesystem(char* driveLabel, uint64_t partStart);
 status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, size_t dest);
 status_t vfs_fat16_getFileSize(char* driveLabel, uint64_t partStart, char* path, size_t* sizeWrite);
 status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, list_array** listWrite);
-status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry** entryWrite);
-status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry** entryWrite);
+status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry* entryWrite);
+status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry* entryWrite);
 
 
 #endif /* __KERNEL_VFS_H__ */

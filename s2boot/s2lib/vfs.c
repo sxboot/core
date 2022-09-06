@@ -216,6 +216,34 @@ status_t vfs_get_partition_lba(char* drive, uint8_t partNum, uint64_t* lbaWrite)
 
 
 
+static bool vfs_fat16_lnf_read(vfs_fat_dir_entry* dirTable, int ti, char* nameBuf){
+	size_t nameIndex = 0;
+	int lfnIndex = 1;
+	vfs_fat_lfn_entry* lfnp;
+	do{
+		int lfnti = ti - lfnIndex++;
+		if(lfnti < 0)
+			return FALSE;
+		lfnp = (void*) &dirTable[lfnti];
+		for(int ni = 0; ni < 13; ni++){
+			uint16_t lfnchar;
+			if(ni < 5)
+				lfnchar = lfnp->name1[ni];
+			else if(ni < 11)
+				lfnchar = lfnp->name2[ni - 5];
+			else
+				lfnchar = lfnp->name3[ni - 11];
+			if(!lfnchar)
+				break;
+			nameBuf[nameIndex++] = (char) lfnchar;
+			if(nameIndex >= 256)
+				return FALSE;
+		}
+	}while(!(lfnp->sequence & 0x40));
+	nameBuf[nameIndex] = 0;
+	return TRUE;
+}
+
 bool vfs_fat16_isFilesystem(char* driveLabel, uint64_t partStart){
 	vfs_fat16_bpb* bpb = kmalloc(4096);
 	if(!bpb)
@@ -231,13 +259,13 @@ bool vfs_fat16_isFilesystem(char* driveLabel, uint64_t partStart){
 }
 
 status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, size_t dest){
-	vfs_fat_dir_entry* result = 0;
+	vfs_fat_dir_entry result;
 	vfs_fat16_bpb* bpb = NULL;
 	void* destTmp = NULL;
 	uint16_t* fat = NULL;
 	status_t status = vfs_fat16_getFile(driveLabel, partStart, path, &result);
 	CERROR();
-	uint16_t cluster = result->clusterLow;
+	uint16_t cluster = result.clusterLow;
 	if(cluster < 2){ // cluster == 0: file exists but is empty
 		goto _end;
 	}
@@ -248,8 +276,8 @@ status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, si
 	CERROR();
 
 	// use temporary buffer because caller buffer is likely smaller than the size of the memory area the file will be read to (can only read in blocks of size clusterSize)
-	size_t fileSize = result->size;
-	size_t destTmpSize = result->size;
+	size_t fileSize = result.size;
+	size_t destTmpSize = result.size;
 	size_t clusterSize = bpb->sectorsPerCluster * bpb->bytesPerSector;
 	if(destTmpSize % clusterSize != 0)
 		destTmpSize += clusterSize - destTmpSize % clusterSize;
@@ -289,17 +317,17 @@ status_t vfs_fat16_readFile(char* driveLabel, uint64_t partStart, char* path, si
 }
 
 status_t vfs_fat16_getFileSize(char* driveLabel, uint64_t partStart, char* path, size_t* sizeWrite){
-	vfs_fat_dir_entry* result = 0;
+	vfs_fat_dir_entry result;
 	status_t status = vfs_fat16_getFile(driveLabel, partStart, path, &result);
 	CERROR();
 	if(sizeWrite)
-		*sizeWrite = result->size;
+		*sizeWrite = result.size;
 	_end:
 	return status;
 }
 
 status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, list_array** listWrite){
-	vfs_fat_dir_entry* result = 0;
+	vfs_fat_dir_entry result;
 	vfs_fat16_bpb* bpb = NULL;
 	vfs_fat_dir_entry* dirTable = NULL;
 	uint16_t* fat = NULL;
@@ -311,10 +339,9 @@ status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, lis
 	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
 	CERROR();
 	list_array* list = list_array_create(0);
-	// result == NULL means it is the root directory
-	uint16_t cluster = result ? result->clusterLow : 0;
+	uint16_t cluster = result.clusterLow;
 	// cluster == 0 means it is the root directory
-	size_t sectors = cluster ? bpb->sectorsPerCluster : (bpb->rootEntries * 32 / bpb->bytesPerSector);
+	size_t sectors = cluster ? bpb->sectorsPerCluster : (bpb->rootEntries * sizeof(vfs_fat_dir_entry) / bpb->bytesPerSector);
 	dirTable = kmalloc(sectors * bpb->bytesPerSector);
 	if(!dirTable)
 		FERROR(TSX_OUT_OF_MEMORY);
@@ -325,20 +352,29 @@ status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, lis
 			(bpb->hiddenSectors + bpb->reservedSectors + bpb->numberOfFATs * bpb->sectorsPerFAT);
 		status = msio_read_drive(driveLabel, dirLBA, sectors, (size_t) dirTable);
 		CERROR();
-		for(int ti = 0; ti < (cluster ? (bpb->sectorsPerCluster * bpb->bytesPerSector / 32) : bpb->rootEntries); ti++){
-			if(dirTable[ti].nameShort[0] == 0 || (uint8_t) dirTable[ti].nameShort[0] == 0xe5 || util_str_startsWith(dirTable[ti].nameShort, ". ")
-				|| util_str_startsWith(dirTable[ti].nameShort, ".. "))
+		for(int ti = 0; ti < (cluster ? (bpb->sectorsPerCluster * bpb->bytesPerSector / sizeof(vfs_fat_dir_entry)) : bpb->rootEntries); ti++){
+			if(dirTable[ti].nameShort[0] == 0 || (uint8_t) dirTable[ti].nameShort[0] == 0xe5 || (dirTable[ti].attributes & VFS_FAT_DIR_ENTRY_VOLUMELABEL)
+					|| util_str_startsWith(dirTable[ti].nameShort, ". ") || util_str_startsWith(dirTable[ti].nameShort, ".. "))
 				continue;
-			size_t nameLen = util_str_length_c_max(dirTable[ti].nameShort, ' ', 8);
-			size_t extLen = util_str_length_c_max(dirTable[ti].exShort, ' ', 3);
-			char* name = kmalloc(nameLen + extLen + (extLen > 0 ? 1 : 0) + 1);
-			memcpy(name, dirTable[ti].nameShort, nameLen);
-			name[nameLen] = 0;
-			if(extLen > 0){
-				name[nameLen] = '.';
-				memcpy(name + nameLen + 1, dirTable[ti].exShort, extLen);
+			char* name;
+			if(dirTable[ti].nameShort[6] == '~'){
+				char nameTmp[256];
+				if(!vfs_fat16_lnf_read(dirTable, ti, nameTmp))
+					continue;
+				name = kmalloc(strlen(nameTmp) + 1);
+				strcpy(name, nameTmp);
+			}else{
+				size_t nameLen = util_str_length_c_max(dirTable[ti].nameShort, ' ', 8);
+				size_t extLen = util_str_length_c_max(dirTable[ti].exShort, ' ', 3);
+				name = kmalloc(nameLen + extLen + (extLen > 0 ? 1 : 0) + 1);
+				memcpy(name, dirTable[ti].nameShort, nameLen);
+				name[nameLen] = 0;
+				if(extLen > 0){
+					name[nameLen] = '.';
+					memcpy(name + nameLen + 1, dirTable[ti].exShort, extLen);
+				}
+				name[nameLen + extLen + 1] = 0;
 			}
-			name[nameLen + extLen + 1] = 0;
 			list_array_push(list, name);
 		}
 		if(cluster){ // when not root directory, the directory table may span across multiple clusters
@@ -365,43 +401,91 @@ status_t vfs_fat16_listDir(char* driveLabel, uint64_t partStart, char* path, lis
 }
 
 
-status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry** entryWrite){
+static status_t vfs_fat16_get_dir_table_entry(char* driveLabel, size_t dirLBA, bool isRootDir, vfs_fat16_bpb* bpb, vfs_fat_dir_entry* dirTable, bool wantFile, char* next, vfs_fat_dir_entry** resultW){
 	status_t status = 0;
-	vfs_fat16_bpb* bpb = NULL;
-	vfs_fat_dir_entry* dirTable = NULL;
-	if(util_str_contains(path, ' '))
-		FERROR(TSX_INVALID_SYNTAX);
-	updateLoadingWheel();
-	bpb = kmalloc(4096);
-	if(!bpb)
-		FERROR(TSX_OUT_OF_MEMORY);
-	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
-	CERROR();
-	dirTable = kmalloc(4096);
-	if(!dirTable)
-		FERROR(TSX_OUT_OF_MEMORY);
-	path++;
-	size_t parts = util_count_parts(path, '/');
-	char* next = path;
-	size_t dirLBA = bpb->hiddenSectors + bpb->reservedSectors + bpb->numberOfFATs * bpb->sectorsPerFAT;
 	bool found = FALSE;
-	uint16_t lastCluster = 0;
-	vfs_fat_dir_entry* result = NULL;
-	for(int i = 0; i < parts - 1; i++){
-		for(int ts = 0; ts < ((i == 0) ? (bpb->rootEntries * 32 / bpb->bytesPerSector) : bpb->sectorsPerCluster); ts++){ // ts = table sector (sector index in table)
-			updateLoadingWheel();
-			status = msio_read_drive(driveLabel, dirLBA + ts, 1, (size_t) dirTable);
-			CERROR();
-			for(int ti = 0; ti < bpb->bytesPerSector / 32; ti++){ // ti = table index (index in table sector)
+
+	char* fileShortExtension;
+	if(wantFile){
+		if(util_str_contains(next, '.'))
+			fileShortExtension = util_str_cut_to(next, '.') + 1;
+		else
+			fileShortExtension = "";
+		while(util_str_contains(fileShortExtension, '.'))
+			fileShortExtension = util_str_cut_to(fileShortExtension, '.') + 1;
+	}
+
+	size_t tableEntriesPerSector = bpb->bytesPerSector / sizeof(vfs_fat_dir_entry);
+	for(int ts = 0; ts < (isRootDir ? (bpb->rootEntries * sizeof(vfs_fat_dir_entry) / bpb->bytesPerSector) : bpb->sectorsPerCluster); ts++){ // ts = table sector (sector index in table)
+		updateLoadingWheel();
+		memcpy(dirTable, dirTable + bpb->bytesPerSector, bpb->bytesPerSector);
+		status = msio_read_drive(driveLabel, dirLBA + ts, 1, (size_t) dirTable + bpb->bytesPerSector);
+		CERROR();
+		for(int ti = tableEntriesPerSector; ti < tableEntriesPerSector * 2; ti++){ // ti = table index (index in table sector)
+			if(wantFile){
+				if((dirTable[ti].attributes & VFS_FAT_DIR_ENTRY_SUBDIR) || (dirTable[ti].attributes & VFS_FAT_DIR_ENTRY_VOLUMELABEL))
+					continue;
+			}else{
 				if(!(dirTable[ti].attributes & VFS_FAT_DIR_ENTRY_SUBDIR))
 					continue;
-				if(((uint8_t)dirTable[ti].nameShort[0]) == 0xe5)
-					continue;
-				if(((uint8_t)dirTable[ti].nameShort[0]) == 0)
-					continue;
-				bool match = TRUE;
-				if(dirTable[ti].nameShort[6] == '~'){
-					match = FALSE;
+			}
+			if(((uint8_t) dirTable[ti].nameShort[0]) == 0xe5)
+				continue;
+			if(((uint8_t) dirTable[ti].nameShort[0]) == 0)
+				continue;
+			bool match = TRUE;
+			if(dirTable[ti].nameShort[6] == '~'){
+				char name[256];
+				if(vfs_fat16_lnf_read(dirTable, ti, name)){
+					size_t namelen = strlen(name);
+					for(int j = 0; j < namelen + 1; j++){
+						if(next[j] == '/' || !next[j]){
+							if(name[j])
+								match = FALSE;
+							break;
+						}
+						if(next[j] != name[j])
+							match = FALSE;
+						if(!match)
+							break;
+					}
+				}
+			}else{
+				if(wantFile){
+					if(util_math_min(util_str_length(next), util_str_length_c_max(next, '.', 8)) != util_str_length_c_max(dirTable[ti].nameShort, ' ', 8))
+						continue;
+					if(util_str_length_c(fileShortExtension, 0) != util_str_length_c_max(dirTable[ti].exShort, ' ', 3))
+						continue;
+					for(uint8_t j = 0; j < 8; j++){
+						if(next[j] == '.' || dirTable[ti].nameShort[j] == ' ')
+							break;
+						bool wasLow = FALSE;
+						if(next[j] > 96 && next[j] < 123){
+							wasLow = TRUE;
+							next[j] -= 32;
+						}
+						if(next[j] != dirTable[ti].nameShort[j])
+							match = FALSE;
+						if(wasLow && next[j] > 64 && next[j] < 91)
+							next[j] += 32;
+						if(!match)
+							break;
+					}
+					for(uint8_t i = 0; i < 3; i++){
+						if(fileShortExtension[i] == 0 || dirTable[ti].exShort[i] == ' ')
+							break;
+						bool wasLow = FALSE;
+						if(fileShortExtension[i] > 96 && fileShortExtension[i] < 123){
+							wasLow = TRUE;
+							fileShortExtension[i] -= 32;
+						}
+						if(fileShortExtension[i] != dirTable[ti].exShort[i])
+							match = FALSE;
+						if(wasLow && fileShortExtension[i] > 64 && fileShortExtension[i] < 91)
+							fileShortExtension[i] += 32;
+						if(!match)
+							break;
+					}
 				}else{
 					if(util_str_length_c(next, '/') != util_str_length_c_max(dirTable[ti].nameShort, ' ', 8))
 						continue;
@@ -421,23 +505,53 @@ status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_
 							break;
 					}
 				}
-				if(match){
-					if(i == parts - 2)
-						result = &dirTable[ti];
-					lastCluster = dirTable[ti].clusterLow;
-					dirLBA = VFS_FAT16_DATASTART + (dirTable[ti].clusterLow - 2) * bpb->sectorsPerCluster;
-					found = TRUE;
-					break;
-				}
 			}
-			if(found)
+			if(match){
+				*resultW = &dirTable[ti];
+				found = TRUE;
 				break;
+			}
 		}
-		if(!found){
+		if(found)
+			break;
+	}
+	_end:
+	return status;
+}
+
+status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry* entryWrite){
+	status_t status = 0;
+	vfs_fat16_bpb* bpb = NULL;
+	vfs_fat_dir_entry* dirTable = NULL;
+	updateLoadingWheel();
+	bpb = kmalloc(4096);
+	if(!bpb)
+		FERROR(TSX_OUT_OF_MEMORY);
+	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
+	CERROR();
+	dirTable = kmalloc(bpb->bytesPerSector * 2);
+	if(!dirTable)
+		FERROR(TSX_OUT_OF_MEMORY);
+	path++;
+	size_t parts = util_count_parts(path, '/');
+	char* next = path;
+	size_t dirLBA = bpb->hiddenSectors + bpb->reservedSectors + bpb->numberOfFATs * bpb->sectorsPerFAT;
+	uint16_t lastCluster = 0;
+	vfs_fat_dir_entry* result = NULL;
+	for(int i = 0; i < parts - 1; i++){
+		vfs_fat_dir_entry* matchEntry = NULL;
+		status = vfs_fat16_get_dir_table_entry(driveLabel, dirLBA, i == 0, bpb, dirTable, FALSE, next, &matchEntry);
+		CERROR();
+		if(matchEntry){
+			if(i == parts - 2)
+				result = matchEntry;
+			lastCluster = matchEntry->clusterLow;
+			dirLBA = VFS_FAT16_DATASTART + (matchEntry->clusterLow - 2) * bpb->sectorsPerCluster;
+		}else{
 			if(i != 0){
 				// the directory table may continue beyond a single cluster
 				updateLoadingWheel();
-				uint16_t* fat = (uint16_t*) dirTable;
+				uint16_t* fat = (uint16_t*) dirTable; // reuse allocated memory
 				status = msio_read_drive(driveLabel, bpb->hiddenSectors + bpb->reservedSectors + (lastCluster * 2) / bpb->bytesPerSector, 1, (size_t) fat);
 				CERROR();
 				uint16_t nextCluster = fat[lastCluster % bpb->bytesPerSector];
@@ -450,24 +564,24 @@ status_t vfs_fat16_getDir(char* driveLabel, uint64_t partStart, char* path, vfs_
 			}
 			FERROR(TSX_NO_SUCH_DIRECTORY);
 		}
-		found = FALSE;
 		next = util_str_cut_to(next, '/') + 1;
 	}
-	*entryWrite = result;
+	if(result)
+		*entryWrite = *result;
+	else
+		memset(entryWrite, 0, sizeof(vfs_fat_dir_entry));
 	_end:
 	if(dirTable)
-		kfree(dirTable, 4096);
+		kfree(dirTable, bpb->bytesPerSector * 2);
 	if(bpb)
 		kfree(bpb, 4096);
 	return status;
 }
 
-status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry** entryWrite){
+status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs_fat_dir_entry* entryWrite){
 	status_t status = 0;
 	vfs_fat16_bpb* bpb = NULL;
 	vfs_fat_dir_entry* dirTable = NULL;
-	if(util_str_contains(path, ' '))
-		FERROR(TSX_INVALID_SYNTAX);
 	updateLoadingWheel();
 	bpb = kmalloc(4096);
 	if(!bpb)
@@ -475,7 +589,7 @@ status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs
 	status = msio_read_drive(driveLabel, partStart, 1, (size_t) bpb);
 	CERROR();
 	updateLoadingWheel();
-	vfs_fat_dir_entry* directory;
+	vfs_fat_dir_entry directory;
 
 	status = vfs_fat16_getDir(driveLabel, partStart, path, &directory);
 	CERROR();
@@ -484,92 +598,32 @@ status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs
 	size_t parts = util_count_parts(path, '/');
 	uint16_t lastCluster = 0;
 	size_t dirLBA;
-	if(directory){
-		lastCluster = directory->clusterLow;
-		dirLBA = VFS_FAT16_DATASTART + (directory->clusterLow - 2) * bpb->sectorsPerCluster;
-	}else{ // directory == NULL: root directory
+	if(directory.clusterLow){
+		lastCluster = directory.clusterLow;
+		dirLBA = VFS_FAT16_DATASTART + (directory.clusterLow - 2) * bpb->sectorsPerCluster;
+	}else{ // root directory
 		dirLBA = bpb->hiddenSectors + bpb->reservedSectors + bpb->numberOfFATs * bpb->sectorsPerFAT;
 	}
 	char* next = path + strlen(path);
 	for(; next > path && *(next - 1) != '/'; next--); // cut to the last part
 
-	dirTable = kmalloc(4096);
+	dirTable = kmalloc(bpb->bytesPerSector * 2);
 	if(!dirTable)
 		FERROR(TSX_OUT_OF_MEMORY);
-	bool found = FALSE;
-	vfs_fat_dir_entry* result;
+
+	vfs_fat_dir_entry* result = NULL;
 
 	updateLoadingWheel();
-	char* extension;
-	if(util_str_contains(next, '.'))
-		extension = util_str_cut_to(next, '.') + 1;
-	else
-		extension = "";
-	while(util_str_contains(extension, '.'))
-		extension = util_str_cut_to(extension, '.') + 1;
 	while(true){
-		for(int ts = 0; ts < ((parts == 1) ? (bpb->rootEntries * 32 / bpb->bytesPerSector) : bpb->sectorsPerCluster); ts++){ // ts = table sector (sector index in table)
-			updateLoadingWheel();
-			status = msio_read_drive(driveLabel, dirLBA + ts, 1, (size_t) dirTable);
-			CERROR();
-			for(int ti = 0; ti < bpb->bytesPerSector / 32; ti++){ // ti = table index (index in table sector)
-				if(!(dirTable[ti].attributes & VFS_FAT_DIR_ENTRY_FILE) && !(dirTable[ti].attributes & VFS_FAT_DIR_ENTRY_FILE_NEW))
-					continue;
-				if(((uint8_t)dirTable[ti].nameShort[0]) == 0xe5)
-					continue;
-				if(((uint8_t)dirTable[ti].nameShort[0]) == 0)
-					continue;
-				bool match = TRUE;
-				if(dirTable[ti].nameShort[6] == '~'){
-					match = FALSE;
-				}else{
-					if(util_math_min(util_str_length(next), util_str_length_c_max(next, '.', 8)) != util_str_length_c_max(dirTable[ti].nameShort, ' ', 8))
-						continue;
-					if(util_str_length_c(extension, 0) != util_str_length_c_max(dirTable[ti].exShort, ' ', 3))
-						continue;
-					for(uint8_t j = 0; j < 8; j++){
-						if(next[j] == '.' || dirTable[ti].nameShort[j] == ' ')
-							break;
-						bool wasLow = FALSE;
-						if(next[j] > 96 && next[j] < 123){
-							wasLow = TRUE;
-							next[j] -= 32;
-						}
-						if(next[j] != dirTable[ti].nameShort[j])
-							match = FALSE;
-						if(wasLow && next[j] > 64 && next[j] < 91)
-							next[j] += 32;
-						if(!match)
-							break;
-					}
-					for(uint8_t i = 0; i < 3; i++){
-						if(extension[i] == 0 || dirTable[ti].exShort[i] == ' ')
-							break;
-						bool wasLow = FALSE;
-						if(extension[i] > 96 && extension[i] < 123){
-							wasLow = TRUE;
-							extension[i] -= 32;
-						}
-						if(extension[i] != dirTable[ti].exShort[i])
-							match = FALSE;
-						if(wasLow && extension[i] > 64 && extension[i] < 91)
-							extension[i] += 32;
-						if(!match)
-							break;
-					}
-				}
-				if(match){
-					result = &dirTable[ti];
-					lastCluster = dirTable[ti].clusterLow;
-					dirLBA = VFS_FAT16_DATASTART + (dirTable[ti].clusterLow - 2) * bpb->sectorsPerCluster;
-					found = TRUE;
-					break;
-				}
-			}
-			if(found)
-				break;
-		}
-		if(!found){
+		vfs_fat_dir_entry* matchEntry = NULL;
+		status = vfs_fat16_get_dir_table_entry(driveLabel, dirLBA, parts == 1, bpb, dirTable, TRUE, next, &matchEntry);
+		CERROR();
+		if(matchEntry){
+			result = matchEntry;
+			lastCluster = matchEntry->clusterLow;
+			dirLBA = VFS_FAT16_DATASTART + (matchEntry->clusterLow - 2) * bpb->sectorsPerCluster;
+			break;
+		}else{
 			if(parts > 1){
 				updateLoadingWheel();
 				uint16_t* fat = (uint16_t*) dirTable;
@@ -583,15 +637,12 @@ status_t vfs_fat16_getFile(char* driveLabel, uint64_t partStart, char* path, vfs
 				}
 			}
 			FERROR(TSX_NO_SUCH_FILE);
-		}else
-			break;
+		}
 	}
-	if(!found) // this should never be true
-		FERROR(TSX_NO_SUCH_FILE);
-	*entryWrite = result;
+	*entryWrite = *result;
 	_end:
 	if(dirTable)
-		kfree(dirTable, 4096);
+		kfree(dirTable, bpb->bytesPerSector * 2);
 	if(bpb)
 		kfree(bpb, 4096);
 	return status;
